@@ -10,19 +10,23 @@
 #Run for the first time only
 #install.packages(librarian)
 
-librarian::shelf(ggplot2,dplyr,rgl,plot3D,plot3Drgl)
+# To run this code in macos it is necessary to install XQuartz from 
+#www.xquartz.org
+
+librarian::shelf(ggplot2,dplyr,plot3D,plot3Drgl,readr,rgl)
+
 
 #Data:
-dat <- read.csv("~/GitHub/scaling_rivers-website/data/cum_resp_YRB_data_0725_2022_entropy.csv", 
-                stringsAsFactors=TRUE)
-#Plot:
-p <- ggplot(dat,aes(AreSqKM,cum_totco2g_m2_day))+
-  geom_point()+
-  scale_x_log10()+
-  scale_y_log10()
-p
 
-#Land-cover plot (2016)
+#header info
+hdr <- read.csv("data/header_info_cum_resp_YRB_data_0725_2022.csv")
+hdr
+
+#values
+dat <- read.csv("data/cum_resp_YRB_data_0725_2022_entropy.csv", 
+                stringsAsFactors=TRUE)
+
+#Land-cover categories (2016)
 thd <- 70
 
 dat$lnd_cat <- as.factor(with(dat,ifelse(TOT_urban16>thd,"Urban",
@@ -31,6 +35,83 @@ dat$lnd_cat <- as.factor(with(dat,ifelse(TOT_urban16>thd,"Urban",
                                                        ifelse(TOT_agrc16>thd,"Agriculture",
                                                               ifelse(TOT_shrub16>thd,"Shrubland",
                                                                      "Mixed covers")))))))
+
+#exploratory plots
+
+# Slope distribution (segments)
+slp.p <- ggplot(dat,aes(CAT_STREAM_SLOPE))+
+  geom_vline(xintercept = 0.01425)+
+  geom_density()+
+  scale_x_log10()
+slp.p
+
+# # Raw slope data
+# dat %>% ggplot(aes(CAT_STREAM_SLOPE, fill = lnd_cat))+
+#   geom_density(alpha = 0.5)+
+#   geom_vline(xintercept = 0.01425, linetype = "dashed")+
+#   scale_x_log10()+
+#   guides(fill = guide_legend(title="Land use type"))
+# 
+# #color scale
+# colors <- ggplot_build(dat %>% ggplot(aes(CAT_STREAM_SLOPE, fill = lnd_cat))+
+#                geom_density(alpha = 0.5)+
+#                geom_vline(xintercept = 0.01425, linetype = "dashed")+
+#                scale_x_log10()+
+#                guides(fill = guide_legend(title="Land use type")))
+# unique(colors$data[[1]]$fill)
+
+# Raw slope data (color scale)
+dat %>% ggplot(aes(TOT_STREAM_SLOPE, fill = lnd_cat))+
+  geom_density(alpha = 0.5)+
+  geom_vline(xintercept = 0.01425, linetype = "dashed")+
+  scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3"))+
+  scale_x_log10()+
+  guides(fill = guide_legend(title="Land use type"))
+
+
+# Area distribution (segments)
+are.p <- ggplot(dat,aes(CAT_BASIN_AREA, fill = lnd_cat))+
+  geom_density(alpha = 0.5)+
+  scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3", "gray"))+
+  scale_x_log10()+
+  guides(fill = guide_legend(title="Land use type"))
+are.p
+
+# Area distribution excluding urban and wetlands
+dat %>% 
+  filter(lnd_cat %in% c("Forest", "Agriculture", "Shrubland", "Mixed covers")) %>%
+  ggplot(aes(CAT_BASIN_AREA, fill = lnd_cat))+
+  geom_density(alpha = 0.5)+
+  scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3", "gray"))+
+  scale_x_log10()+
+  guides(fill = guide_legend(title="Land use type"))
+
+
+# Stream length distribution (cumulative at drainage point)
+lgt.p <- ggplot(dat,aes(length_m, fill = lnd_cat))+
+  geom_density(alpha = 0.5)+
+  scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3", "gray"))+
+  scale_x_log10()+
+  guides(fill = guide_legend(title="Land use type"))
+lgt.p
+
+# Stream length distribution excluding urban and wetlands
+dat %>% 
+  filter(lnd_cat %in% c("Forest", "Agriculture", "Shrubland", "Mixed covers")) %>%
+  ggplot(aes(length_m, fill = lnd_cat))+
+  geom_density(alpha = 0.5)+
+  scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3", "gray"))+
+  scale_x_log10()+
+  guides(fill = guide_legend(title="Land use type"))
+
+# Entropy and area
+p2 <- ggplot(dat,aes(AreSqKM,h_rel_3))+
+  geom_point()+
+  scale_x_log10()
+p2
+
+
+
 # Scaling relationships by land cover
 
 ## Area and stream length 
