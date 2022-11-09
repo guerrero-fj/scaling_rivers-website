@@ -39,7 +39,7 @@ dat$lnd_cat <- as.factor(with(dat,ifelse(TOT_urban16>thd,"Urban",
 #exploratory plots
 
 # Slope distribution (segments)
-slp.p <- ggplot(dat,aes(CAT_STREAM_SLOPE))+
+slp.p <- ggplot(dat,aes(TOT_STREAM_SLOPE))+
   geom_vline(xintercept = 0.01425)+
   geom_density()+
   scale_x_log10()
@@ -62,7 +62,7 @@ slp.p
 
 # Raw slope data (color scale)
 dat %>% ggplot(aes(TOT_STREAM_SLOPE, fill = lnd_cat))+
-  geom_density(alpha = 0.5)+
+  geom_density(alpha = 0.5)+#scale densities
   geom_vline(xintercept = 0.01425, linetype = "dashed")+
   scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3"))+
   scale_x_log10()+
