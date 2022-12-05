@@ -2,5 +2,5 @@
 .Rhistory
 .RData
 .Ruserdata
-
 /.quarto/
+scaling_plots_script.R

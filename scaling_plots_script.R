@@ -104,7 +104,7 @@ p1
 
 # First, let's subset ent_lnd to extract the most relevant columns:
 
-ent_lnd_m <- dplyr::select(ent_lnd,COMID,p_urbn,p_frst,p_wtnd,p_agrc,p_shrb,p_urbn_t,
+lnd_m <- dplyr::select(lnd,COMID,p_urbn,p_frst,p_wtnd,p_agrc,p_shrb,p_urbn_t,
                            p_frst_t,p_wtnd_t,p_agrc_t,p_shrb_t,hr_loc,hr_acm)
 
 #Land-cover categories (2016)
