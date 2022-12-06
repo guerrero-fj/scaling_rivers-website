@@ -13,7 +13,7 @@
 # To run this code in macos it is necessary to install XQuartz from 
 #www.xquartz.org
 
-librarian::shelf(ggplot2,dplyr,plot3D,plot3Drgl,readr,rgl,tidyverse)
+librarian::shelf(ggplot2,dplyr,plot3D,plot3Drgl,readr,rgl,tidyverse,entropy)
 
 #Data:
 
@@ -33,11 +33,12 @@ lnd_o <- read.csv("data/YRB_comid_landuse_2011.csv",
 
 #We calculate landscape heterogeneity as the entropy of the proportions of the 
 #different landcover in both the local and cumulative drainage area to each 
-#stream segment. Let's first create a working dataset, which right now is just
+#stream segment. Let's first create a working data set, which right now is just
 #a copy of the original lnd:
 
 dat <- as.tibble(dat_o)
 lnd <- as.tibble(lnd_o)
+my_colors <- c("#F564E3","#00BA38","#F8766D","#B79F00","#619CFF","#00BFC4")
 
 #Let's shorten column names
 
@@ -53,21 +54,135 @@ lnd <- rename(lnd,
             shrb_t = tshrub)
               
             
-#Let's first re-calculate the relative proportions of the land use categories as
-#not all of them add up to 100%
-
+# Let's check that the proportions for both local and watershed scale add up to 100%
 lnd <- lnd %>% group_by(COMID) %>% 
   mutate(tot_loc = urbn + frst + wtnd + agrc + shrb) %>% 
-  mutate(tot_acm = urbn_t + frst_t + wtnd_t + agrc_t + shrb_t) %>% 
-  mutate(p_urbn = if_else(tot_loc > 0, urbn / tot_loc, -9999)) %>% 
-  mutate(p_frst = if_else(tot_loc > 0, frst / tot_loc, -9999)) %>%
-  mutate(p_wtnd = if_else(tot_loc > 0, wtnd / tot_loc, -9999)) %>% 
-  mutate(p_agrc = if_else(tot_loc > 0, agrc / tot_loc, -9999)) %>%
-  mutate(p_shrb = if_else(tot_loc > 0, shrb / tot_loc, -9999))
-           
-# Let's now calculate the relative contribution to information entropy from each 
-# land use type, at the local scale, as p*ln(p),as well as the shannon entropy:
-# h-loc = -sum(plnp) and hr-loc (relative entropy, from 0 to 1) as h-loc/ln(#land use categories = 5)
+  mutate(tot_acm = urbn_t + frst_t + wtnd_t + agrc_t + shrb_t) 
+
+# Local land use totals
+p1 <- ggplot(lnd, aes(y = tot_loc))+
+  geom_boxplot()
+p1
+
+# Cumulative land use totals
+p2 <- ggplot(lnd, aes(y = tot_acm))+
+  geom_boxplot()
+p2
+
+
+# Since these data set only contain the proportions of the largest categories, the 
+# remaining percentage should correspond to "other" uses that are not explicitly 
+# included. For the Yakima river basin this could be Hay and Pastures. We will assing
+# the remaining percentages to "othr". 
+
+lnd_e <- lnd %>% group_by(COMID) %>% 
+  mutate(othr = 100 - tot_loc) %>% 
+  mutate(othr_t = 100 - tot_acm) %>% 
+  mutate(p_urbn = urbn/100) %>% 
+  mutate(p_frst = frst/100) %>% 
+  mutate(p_agrc = agrc/100) %>% 
+  mutate(p_wtnd = wtnd/100) %>% 
+  mutate(p_shrb = shrb/100) %>% 
+  mutate(p_othr = othr/100) %>% 
+  mutate(p_urbn_t = urbn_t/100) %>% 
+  mutate(p_frst_t = frst_t/100) %>% 
+  mutate(p_agrc_t = agrc_t/100) %>% 
+  mutate(p_wtnd_t = wtnd_t/100) %>% 
+  mutate(p_shrb_t = shrb_t/100) %>% 
+  mutate(p_othr_t = othr_t/100) 
+
+
+# # Let's examine how many samples are below 75% for total land cover use
+# 
+# lr_smp <- nrow(filter(dplyr::select(lnd,tot_acm),tot_acm < 70))
+# lr_smp
+# 
+# # The percentage of samples for which less than 75% of the land cover is categorized is
+# 
+# lr_pct <- lr_smp/nrow(lnd)
+# 
+# # Only 5% of the segments. We will remove these segments from the analysis
+# 
+# lnd_r <- dplyr::filter(lnd, tot_acm > 70)
+# 
+# # Let's now check at the local level
+# 
+# lr_smp_l <- nrow(filter(dplyr::select(lnd_r,tot_loc),tot_loc < 70))
+# lr_smp_l
+# 
+# # 266 additional samples with less than 70% of the local drainage area with categorized land cover. We will
+# # remove these additional samples from the analysis
+# 
+# lnd_d <- dplyr::filter(lnd_r, tot_loc > 70)
+# 
+# #With this procedure we are still retaining 91% of the data for analysis
+# 
+# # Let's first re-calculate the relative proportions of the land use categories as
+# #not all of them add up to 100%
+# 
+# lnd_d <- lnd_d %>% group_by(COMID) %>% 
+#   mutate(p_urbn = urbn/tot_loc) %>% 
+#   mutate(p_frst = frst/tot_loc) %>%
+#   mutate(p_wtnd = wtnd/tot_loc) %>% 
+#   mutate(p_agrc = agrc/tot_loc) %>%
+#   mutate(p_shrb = shrb/tot_loc) %>% 
+#   mutate(p_urbn_t = urbn_t/tot_acm) %>% 
+#   mutate(p_frst_t = frst_t/tot_acm) %>%
+#   mutate(p_wtnd_t = wtnd_t/tot_acm) %>% 
+#   mutate(p_agrc_t = agrc_t/tot_acm) %>%
+#   mutate(p_shrb_t = shrb_t/tot_acm)
+# 
+# #Let's now check that the sum of the land use categories add up to 100%
+# 
+# lnd_e <- lnd_d %>% select(COMID,p_urbn,p_frst,p_wtnd,p_agrc,p_shrb,
+#                           p_urbn_t,p_frst_t,p_wtnd_t,p_agrc_t,p_shrb_t) %>% group_by(COMID) %>% 
+#   mutate(tot_loc = p_urbn + p_frst + p_wtnd + p_agrc + p_shrb) %>% 
+#   mutate(tot_acm = p_urbn_t + p_frst_t + p_wtnd_t + p_agrc_t + p_shrb_t)
+
+
+p3_dat <- select(lnd_e,COMID,p_urbn,p_frst,p_wtnd,p_agrc,p_shrb, p_othr)
+p3_dat <- gather(p3_dat,c(2:7),key = "use", value = "fraction")
+
+p3 <- ggplot(p3_dat,aes(x = use, y = fraction, color = use, fill = use))+
+  geom_boxplot(alpha = 0.5)+
+  scale_color_manual(values = my_colors)+
+  scale_fill_manual(values = my_colors)
+p3
+
+p4_dat <- select(lnd_e,COMID,p_urbn_t,p_frst_t,p_wtnd_t,p_agrc_t,p_shrb_t, p_othr_t)
+p4_dat <- gather(p4_dat,c(2:7),key = "use", value = "fraction")
+
+p4 <- ggplot(p4_dat,aes(x = use, y = fraction, color = use, fill = use))+
+  geom_boxplot(alpha = 0.5)+
+  scale_color_manual(values = my_colors)+
+  scale_fill_manual(values = my_colors)
+p4
+
+          
+################################################################################
+# Entropy analysis
+################################################################################
+
+# Let's start with a simple calculation of the Shannon's entropy as a proxy for 
+# land use heterogeneity
+
+# Local entropies
+
+lnd_e %>% group_by(COMID) %>% 
+  mutate(plp_agrc = if_else(p_agrc > 0,p_agrc*log(p_agrc, exp(1)),0)) %>% 
+  mutate(plp_frst = if_else(p_frst > 0,p_frst*log(p_frst, exp(1)),0)) %>% 
+  mutate(plp_othr = if_else(p_othr > 0,p_othr*log(p_othr, exp(1)),0)) %>% 
+  mutate(plp_shrb = if_else(p_shrb > 0,p_shrb*log(p_shrb, exp(1)),0)) %>% 
+  mutate(plp_urbn = if_else(p_urbn > 0,p_urbn*log(p_urbn, exp(1)),0)) %>% 
+  mutate(plp_wtnd = if_else(p_wtnd > 0,p_wtnd*log(p_wtnd, exp(1)),0)) %>% 
+  mutate(h_loc = -(plp_agrc + plp_frst + plp_othr + plp_shrb + plp_urbn + plp_wtnd)) %>% 
+  mutate(hr_loc = h_loc/log(6,exp(1)))
+
+
+
+
+
+
            
 lnd <- lnd %>% group_by(COMID) %>% 
   mutate(plnp_urbn = if_else(p_urbn > 0,p_urbn*log(p_urbn, exp(1)),0)) %>% 
@@ -95,27 +210,98 @@ lnd <- lnd %>% group_by(COMID) %>%
   mutate(h_acm = -(plnp_urbn_t + plnp_frst_t + plnp_wtnd_t + plnp_agrc_t + plnp_shrb_t)) %>% 
   mutate(hr_acm = h_acm/log(5,exp(1)))
 
-p1 <- ggplot(lnd,aes(hr_loc,hr_acm))+
-  geom_point()
-p1
 
+# Information content analysis
 
-# Let's merge a subset of our entropy calculations with the biogeochemical dataset
+# Using Shannon's entropy calculations, we could identify which land use types 
+# either locally or at the watershed scale contribute with most of the information
+# about spatial variablity. 
 
 # First, let's subset ent_lnd to extract the most relevant columns:
 
 lnd_m <- dplyr::select(lnd,COMID,p_urbn,p_frst,p_wtnd,p_agrc,p_shrb,p_urbn_t,
                            p_frst_t,p_wtnd_t,p_agrc_t,p_shrb_t,hr_loc,hr_acm)
 
-#Land-cover categories (2016)
-thd <- 70
 
-dat$lnd_cat <- as.factor(with(dat,ifelse(TOT_urban16>thd,"Urban",
-                                         ifelse(TOT_forest16>thd,"Forest",
-                                                ifelse(TOT_wetland16>thd,"Wetland",
-                                                       ifelse(TOT_agrc16>thd,"Agriculture",
-                                                              ifelse(TOT_shrub16>thd,"Shrubland",
+
+# From this part down, I will use re-sampling to estimate averages and standard
+# deviations for the information contribution of each land use category
+
+# Information contribution, local scale
+
+loc_inf <- dplyr::select(lnd_m, COMID, p_urbn, p_frst, p_agrc, p_wtnd, p_shrb)
+
+# The first step is to express land use proportions in the context of the grand
+# total
+
+g_tot <- sum(loc_inf)
+
+loc_inf <- loc_inf %>% 
+  mutate(pi_urbn = if_else(p_urbn > 0, p_urbn/g_tot, 0)) %>% 
+  mutate(pi_frst = if_else(p_frst > 0, p_frst/g_tot, 0)) %>% 
+  mutate(pi_wtnd = if_else(p_wtnd > 0, p_wtnd/g_tot, 0)) %>% 
+  mutate(pi_agrc = if_else(p_agrc > 0, p_agrc/g_tot, 0)) %>% 
+  mutate(pi_shrb = if_else(p_shrb > 0, p_shrb/g_tot, 0))
+
+# The second step is to calculate the information contribution of each land use
+# across all the stream segments. To do so, we need to normalize pi_use by the 
+# total of each column.
+
+loc_ifc <- loc_inf %>% 
+  mutate(ic_urbn = pi_urbn/sum(pi_urbn)) %>% 
+  mutate(ic_frst = pi_frst/sum(pi_frst)) %>% 
+  mutate(ic_wtnd = pi_wtnd/sum(pi_wtnd)) %>% 
+  mutate(ic_agrc = pi_agrc/sum(pi_agrc)) %>% 
+  mutate(ic_shrb = pi_shrb/sum(pi_shrb))
+
+glimpse(loc_ifc)
+
+
+#Land-cover categories (2011)
+thd <- 0.8
+
+
+# Local drainage area
+lnd_m$use_loc <- as.factor(with(lnd_m,ifelse(p_urbn>thd,"Urban",
+                                             ifelse(p_frst>thd,"Forest",
+                                                    ifelse(p_wtnd>thd,"Wetland",
+                                                           ifelse(p_agrc>thd,"Agriculture",
+                                                                  ifelse(p_shrb>thd,"Shrubland",
+                                                                         "Mixed covers")))))))
+
+# Total drainage area
+lnd_m$use_acm <- as.factor(with(lnd_m,ifelse(p_urbn_t>thd,"Urban",
+                                         ifelse(p_frst_t>thd,"Forest",
+                                                ifelse(p_wtnd_t>thd,"Wetland",
+                                                       ifelse(p_agrc_t>thd,"Agriculture",
+                                                              ifelse(p_shrb_t>thd,"Shrubland",
                                                                      "Mixed covers")))))))
+
+
+# Color scale
+
+# Let's define a color scale for our plots using a basic density plot for local 
+# entropies
+
+
+colors <- ggplot_build(lnd_m %>% ggplot(aes(hr_loc, color = use_loc, fill = use_loc))+
+               geom_density(alpha = 0.5))
+unique(colors$data[[1]]$fill)
+
+my_colors <- c("#F564E3","#00BA38","#F8766D","#B79F00","#619CFF","#00BFC4")
+
+p1 <- ggplot(lnd_m,aes(hr_loc,hr_acm, color = use_acm))+
+    geom_point()+
+    scale_color_manual(values = my_colors)
+p1
+
+p2 <- ggplot(lnd_m, aes(hr_loc, color = use_loc, fill = use_loc))+
+  geom_density(alpha = 0.5)+
+  scale_fill_manual(values = my_colors)+
+  scale_color_manual(values = my_colors)+
+  facet_wrap(~use_loc)
+p2
+
 
 #exploratory plots
 
