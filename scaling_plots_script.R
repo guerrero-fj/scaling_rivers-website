@@ -1,5 +1,6 @@
 ###############################################################################
 # Scaling Analysis for Respiration Rates across the Yakima River Basin
+# DATA PREPARATION
 ###############################################################################
 
 #By : Francisco Guerrero
@@ -13,7 +14,7 @@
 # To run this code in macos it is necessary to install XQuartz from 
 #www.xquartz.org
 
-librarian::shelf(ggplot2,dplyr,plot3D,plot3Drgl,readr,rgl,tidyverse,entropy, purrr)
+librarian::shelf(ggplot2,dplyr,plot3D,plot3Drgl,readr,rgl,tidyverse,entropy,GGally)
 
 #Data:
 
@@ -36,8 +37,8 @@ lnd_o <- read.csv("data/YRB_comid_landuse_2011.csv",
 #stream segment. Let's first create a working data set, which right now is just
 #a copy of the original lnd:
 
-dat <- as.tibble(dat_o)
-lnd <- as.tibble(lnd_o)
+dat <- as_tibble(dat_o)
+lnd <- as_tibble(lnd_o)
 my_colors <- c("#F564E3","#00BA38","#F8766D","#B79F00","#619CFF","#00BFC4")
 
 #Let's shorten column names
@@ -54,21 +55,51 @@ lnd <- rename(lnd,
             shrb_t = tshrub)
               
             
-# Let's check that the proportions for both local and watershed scale add up to 100%
+# This land use data set only contains percentage cover for the main land uses. So,
+# not all the land uses add up to 100%. Let's double check for these cases, as well as
+# other potential anomalies
+
 lnd <- lnd %>% group_by(COMID) %>% 
-  mutate(tot_loc = urbn + frst + wtnd + agrc + shrb) %>% 
-  mutate(tot_acm = urbn_t + frst_t + wtnd_t + agrc_t + shrb_t) 
+  mutate(tot_loc = round(urbn + frst + wtnd + agrc + shrb,2)) %>% 
+  mutate(tot_acm = round(urbn_t + frst_t + wtnd_t + agrc_t + shrb_t,2)) 
 
-# Local land use totals
-p1 <- ggplot(lnd, aes(y = tot_loc))+
-  geom_boxplot()
-p1
+summary(lnd$tot_loc)
+summary(lnd$tot_acm)
 
-# Cumulative land use totals
-p2 <- ggplot(lnd, aes(y = tot_acm))+
-  geom_boxplot()
-p2
+# Although the mean for total land with a categorized use is between 91 -92% for 
+# total watershed and local catchment respectively. We also observe values about 
+# 100%.
 
+zeroes_loc <- filter(lnd,tot_loc==0) # 21 cases
+zeroes_tot <- filter(lnd,tot_acm==0) # 0 cases
+
+above_loc <- filter(lnd,tot_loc > 100.000) #240 cases
+above_tot <- filter(lnd,tot_acm > 100.000) #106 cases
+
+# At a local level, 0's may represent situations in which land cover types, other 
+# than those included in the dataset, were dominant (like pastures). Above 100 percent
+# values are probably the result of rounding up or down percentages. The same could 
+# be said about the above 100 percent values at the watershed scale. In those cases, we
+# need to adjust land use percentages to add up to 100 exactly. 
+
+lnd <- lnd %>% 
+  mutate(agrc = if_else(tot_loc>100.00,agrc*(100/tot_loc),agrc)) %>% 
+  mutate(frst = if_else(tot_loc>100.00,frst*(100/tot_loc),frst)) %>% 
+  mutate(shrb = if_else(tot_loc>100.00,shrb*(100/tot_loc),shrb)) %>% 
+  mutate(urbn = if_else(tot_loc>100.00,urbn*(100/tot_loc),urbn)) %>% 
+  mutate(wtnd = if_else(tot_loc>100.00,wtnd*(100/tot_loc),wtnd)) %>%  
+  mutate(tot_loc = if_else(tot_loc>100.00,agrc+frst+shrb+urbn+wtnd,tot_loc)) %>%
+  mutate(agrc_t = if_else(tot_acm>100.00,agrc_t*(100/tot_acm),agrc_t)) %>% 
+  mutate(frst_t = if_else(tot_acm>100.00,frst_t*(100/tot_acm),frst_t)) %>% 
+  mutate(shrb_t = if_else(tot_acm>100.00,shrb_t*(100/tot_acm),shrb_t)) %>% 
+  mutate(urbn_t = if_else(tot_acm>100.00,urbn_t*(100/tot_acm),urbn_t)) %>% 
+  mutate(wtnd_t = if_else(tot_acm>100.00,wtnd_t*(100/tot_acm),wtnd_t)) %>% 
+  mutate(tot_acm = if_else(tot_acm>100.00,agrc_t+frst_t+shrb_t+urbn_t+wtnd_t,tot_acm))
+
+# Let's double check the presence of above 100% values:
+
+above_loc <- filter(lnd,tot_loc > 100.000) #27 cases
+above_tot <- filter(lnd,tot_acm > 100.000) #17 cases
 
 # Since these data set only contain the proportions of the largest categories, the 
 # remaining percentage should correspond to "other" uses that are not explicitly 
@@ -76,8 +107,8 @@ p2
 # the remaining percentages to "othr". 
 
 lnd <- lnd %>% group_by(COMID) %>% 
-  mutate(othr = 100 - tot_loc) %>% 
-  mutate(othr_t = 100 - tot_acm) %>% 
+  mutate(othr = if_else(100-tot_loc>0,100-tot_loc,0)) %>% 
+  mutate(othr_t = if_else(100-tot_acm>0,100-tot_acm,0)) %>% 
   mutate(p_urbn = urbn/100) %>% 
   mutate(p_frst = frst/100) %>% 
   mutate(p_agrc = agrc/100) %>% 
@@ -99,75 +130,27 @@ lnd <- lnd %>% group_by(COMID) %>%
 # Let's start with a simple calculation of the Shannon's entropy as a proxy for 
 # land use heterogeneity
 
-# Local dataset
-lnd_el <- select(lnd,
-                 COMID,
-                 p_urbn,
-                 p_frst,
-                 p_wtnd,
-                 p_agrc,
-                 p_shrb,
-                 p_othr)
-
-# Watershed dataset
-lnd_et <- select(lnd,
-                 COMID,
-                 p_urbn_t,
-                 p_frst_t,
-                 p_wtnd_t,
-                 p_agrc_t,
-                 p_shrb_t, 
-                 p_othr_t)
-
-
-p3 <- gather(lnd_el,c(2:7),key = "use", value = "fraction") %>% 
-  ggplot(aes(x = use, y = fraction, color = use, fill = use))+
-  geom_boxplot(alpha = 0.5)+
-  scale_color_manual(values = my_colors)+
-  scale_fill_manual(values = my_colors)
-p3
-
-p4 <- gather(lnd_et,c(2:7),key = "use", value = "fraction") %>% 
-  ggplot(aes(x = use, y = fraction, color = use, fill = use))+
-  geom_boxplot(alpha = 0.5)+
-  scale_color_manual(values = my_colors)+
-  scale_fill_manual(values = my_colors)
+# Making row-wise operations (https://dplyr.tidyverse.org/articles/rowwise.html)
+lnd <- lnd %>% rowwise() %>% 
+  mutate(hl = entropy(c(p_agrc,
+                        p_frst,
+                        p_othr,
+                        p_shrb,
+                        p_urbn,
+                        p_wtnd),unit = "log")) %>% 
+  mutate(hrl = hl/log(6)) %>% 
+  mutate(ht = entropy(c(p_agrc_t,
+                        p_frst_t,
+                        p_othr_t,
+                        p_shrb_t,
+                        p_urbn_t,
+                        p_wtnd_t),unit = "log")) %>% 
+  mutate(hrt = ht/log(6)) 
+  
+p4 <- ggplot(lnd,aes(hrl,hrt))+
+  geom_point()
 p4
-
-# Local entropies
-
-nrows = nrow(lnd_el)
-ncols = 3
-
-lh = matrix(1:nrows,nrows,ncols, dimnames = list(NULL,c("COMID","h_loc","hr_loc")))
-
-for(i in 1:nrows){
-  comid =unlist(lnd_el[i,1], use.names = FALSE)
-  y = unlist(lnd_el[i,c(2:7)],use.names = FALSE)
-  h_loc = entropy(y)
-  hr_loc = h_loc/log(length(y),exp(1))
-  lh[i,1] = comid
-  lh[i,2] = h_loc
-  lh[i,3] = hr_loc
-}
-
-# Watershed entropies
-
-nrows = nrow(lnd_et)
-ncols = 3
-
-th = matrix(1:nrows,nrows,ncols, dimnames = list(NULL,c("COMID","h_loc","hr_loc")))
-
-for(i in 1:nrows){
-  comid =unlist(lnd_et[i,1], use.names = FALSE)
-  y = unlist(lnd_et[i,c(2:7)],use.names = FALSE)
-  h_tot = entropy(y)
-  hr_tot = h_tot/log(length(y),exp(1))
-  th[i,1] = comid
-  th[i,2] = h_tot
-  th[i,3] = hr_tot
-}
-
+  
 # Information content analysis
 
 # Using Shannon's entropy calculations, we could identify which land use types 
@@ -179,68 +162,230 @@ for(i in 1:nrows){
 
 # Let's start with local analysis
 
+# Local dataset
+lnd_el <- select(lnd,
+                 p_agrc,
+                 p_frst,
+                 p_othr,
+                 p_shrb,
+                 p_urbn,
+                 p_wtnd)
+
 # Creating a matrix for results
 
-ncols = 5
-ic_loc <- matrix(1:nrows,nrows,ncols, dimnames = list(NULL,c("COMID","Yjn_l","Hn_l","Hmaxn_l", "In_l")))
+ncols = 4
+nrows = 6
+ssz = 600
+ic_loc <- matrix(1:nrows,nrows,ncols, 
+                 dimnames = list(c("Agriculture","Forests","Pastures","Shrublands","Urban","Wetlands"),
+                                 c("Yjn_l","Hn_l","Hmaxn_l", "In_l")))
 
-list_l = list()
+ag_list <- list()
+fr_list <- list()
+pt_list <- list()
+sr_list <- list()
+ub_list <- list()
+wt_list <- list()
 
 # Number of iterations 
-itn = 5
+itn = 5000
 
 for(i in 1:itn){
   if (i == itn +1){
     break
   }
-  loc_im <- sample(as.data.frame(lnd_el))
+  loc_im <- lnd_el[sample(nrow(lnd_el),size=600,replace = FALSE),]
   loc_im <- as.matrix(loc_im)[,order(colnames(loc_im))]
   iml <- loc_im[,c(2:7)]/sum(loc_im[,c(2:7)])
   for(j in 1:ncol(iml)){
-    comid = unlist(lnd_el[i,1], use.names = FALSE)
     yjn = sum(iml[,j])
     hn = entropy(iml[,j], unit = "log")
-    hmaxn = log(nrow(lnd_el),exp(1))
-    ic_loc[j,1]=comid
-    ic_loc[j,2]=yjn
-    ic_loc[j,3]=hn
-    ic_loc[j,4]=hmaxn
-    ic_loc[j,5]=yjn%*%(hmaxn-hn)
+    hmaxn = log(nrow(lnd_el))
+    ic_loc[j,1]=yjn
+    ic_loc[j,2]=hn
+    ic_loc[j,3]=hmaxn
+    ic_loc[j,4]=yjn%*%(hmaxn-hn)
   }
-  list_l[[i]] <- ic_loc
+  ag_list[[i]] <- ic_loc[1,]
+  fr_list[[i]] <- ic_loc[2,]
+  pt_list[[i]] <- ic_loc[3,]
+  sr_list[[i]] <- ic_loc[4,]
+  ub_list[[i]] <- ic_loc[5,]
+  wt_list[[i]] <- ic_loc[6,]
+
 }
+ag_l = as_tibble(do.call("rbind",ag_list))
+ag_l <- ag_l %>% mutate(use="Agriculture")
+fr_l = as_tibble(do.call("rbind",fr_list))
+fr_l <- fr_l %>% mutate(use = "Forests")
+pt_l = as_tibble(do.call("rbind",pt_list))
+pt_l <- pt_l %>% mutate(use = "Pastures")
+sr_l = as_tibble(do.call("rbind",sr_list))
+sr_l <- sr_l %>% mutate(use = "Shurblands")
+ub_l = as_tibble(do.call("rbind",ub_list))
+ub_l <- ub_l %>% mutate(use = "Urban")
+wt_l = as_tibble(do.call("rbind",wt_list))
+wt_l <- wt_l %>% mutate(use = "Wetlands")
 
-# From this part down, I will use re-sampling to estimate averages and standard
-# deviations for the information contribution of each land use category
+local_im <- rbind(ag_l,fr_l,pt_l,sr_l,ub_l,wt_l)
 
-# Information contribution, local scale
+# Watershed Scale
 
-loc_inf <- dplyr::select(lnd_m, COMID, p_urbn, p_frst, p_agrc, p_wtnd, p_shrb)
+# Watershed dataset
+lnd_et <- select(lnd,
+                 p_agrc_t,
+                 p_frst_t,
+                 p_othr_t,
+                 p_shrb_t,
+                 p_urbn_t,
+                 p_wtnd_t)
 
-# The first step is to express land use proportions in the context of the grand
-# total
+# Creating a matrix for results
 
-g_tot <- sum(loc_inf)
+ncols = 4
+nrows = 6
+ssz = 600
+ic_tot <- matrix(1:nrows,nrows,ncols, 
+                 dimnames = list(c("Agriculture","Forests","Pastures","Shrublands","Urban","Wetlands"),
+                                 c("Yjn_l","Hn_l","Hmaxn_l", "In_l")))
 
-loc_inf <- loc_inf %>% 
-  mutate(pi_urbn = if_else(p_urbn > 0, p_urbn/g_tot, 0)) %>% 
-  mutate(pi_frst = if_else(p_frst > 0, p_frst/g_tot, 0)) %>% 
-  mutate(pi_wtnd = if_else(p_wtnd > 0, p_wtnd/g_tot, 0)) %>% 
-  mutate(pi_agrc = if_else(p_agrc > 0, p_agrc/g_tot, 0)) %>% 
-  mutate(pi_shrb = if_else(p_shrb > 0, p_shrb/g_tot, 0))
+agt_list <- list()
+frt_list <- list()
+ptt_list <- list()
+srt_list <- list()
+ubt_list <- list()
+wtt_list <- list()
 
-# The second step is to calculate the information contribution of each land use
-# across all the stream segments. To do so, we need to normalize pi_use by the 
-# total of each column.
+# Number of iterations 
+itn = 5000
 
-loc_ifc <- loc_inf %>% 
-  mutate(ic_urbn = pi_urbn/sum(pi_urbn)) %>% 
-  mutate(ic_frst = pi_frst/sum(pi_frst)) %>% 
-  mutate(ic_wtnd = pi_wtnd/sum(pi_wtnd)) %>% 
-  mutate(ic_agrc = pi_agrc/sum(pi_agrc)) %>% 
-  mutate(ic_shrb = pi_shrb/sum(pi_shrb))
+for(i in 1:itn){
+  if (i == itn +1){
+    break
+  }
+  tot_im <- lnd_et[sample(nrow(lnd_et),size=600,replace = FALSE),]
+  tot_im <- as.matrix(tot_im)[,order(colnames(tot_im))]
+  imt <- tot_im[,c(2:7)]/sum(tot_im[,c(2:7)])
+  for(j in 1:ncol(imt)){
+    yjn = sum(iml[,j])
+    hn = entropy(imt[,j], unit = "log")
+    hmaxn = log(nrow(lnd_et))
+    ic_tot[j,1]=yjn
+    ic_tot[j,2]=hn
+    ic_tot[j,3]=hmaxn
+    ic_tot[j,4]=yjn%*%(hmaxn-hn)
+  }
+  agt_list[[i]] <- ic_tot[1,]
+  frt_list[[i]] <- ic_tot[2,]
+  ptt_list[[i]] <- ic_tot[3,]
+  srt_list[[i]] <- ic_tot[4,]
+  ubt_list[[i]] <- ic_tot[5,]
+  wtt_list[[i]] <- ic_tot[6,]
+  
+}
+agt_l = as_tibble(do.call("rbind",agt_list))
+agt_l <- agt_l %>% mutate(use="Agriculture")
+frt_l = as_tibble(do.call("rbind",frt_list))
+frt_l <- frt_l %>% mutate(use = "Forests")
+ptt_l = as_tibble(do.call("rbind",ptt_list))
+ptt_l <- ptt_l %>% mutate(use = "Pastures")
+srt_l = as_tibble(do.call("rbind",srt_list))
+srt_l <- srt_l %>% mutate(use = "Shurblands")
+ubt_l = as_tibble(do.call("rbind",ubt_list))
+ubt_l <- ubt_l %>% mutate(use = "Urban")
+wtt_l = as_tibble(do.call("rbind",wtt_list))
+wtt_l <- wtt_l %>% mutate(use = "Wetlands")
 
-glimpse(loc_ifc)
+wshd_im <- rbind(agt_l,frt_l,ptt_l,srt_l,ubt_l,wtt_l)
+
+
+p5 <- ggplot(local_im,aes(x = reorder(use,-In_l), y = In_l, fill = use, color = use))+
+  geom_boxplot(alpha = 0.5)+
+  scale_color_manual(values = my_colors)+
+  scale_fill_manual(values = my_colors)
+p5
+
+
+p6 <- ggplot(wshd_im,aes(x = reorder(use,-In_l), y = In_l, fill = use, color = use))+
+  geom_boxplot(alpha = 0.5)+
+  scale_color_manual(values = my_colors)+
+  scale_fill_manual(values = my_colors)
+p6
+
+# Information content analysis suggest the following groups (combining information-rich
+# land use categories with information-poor land use categories). This allows for keeping
+# the discriminating power of the categories, but reducing the variability that contribute
+# less to the patterns
+
+# We will calculate the entropy over the reduced groups and merge this dataset with 
+# biogeochemical data
+
+lnd_s0 <- select(lnd,COMID,p_agrc,p_frst,p_othr,p_shrb,p_urbn,p_wtnd,
+                p_agrc_t,p_frst_t,p_othr_t,p_shrb_t,p_urbn_t,p_wtnd_t)
+
+lnd_s0 <- lnd_s0 %>% group_by(COMID) %>% 
+  mutate(p_ant = p_agrc + p_urbn + p_othr) %>% 
+  mutate(p_frt = p_frst + p_wtnd) %>% 
+  mutate(p_shb = p_shrb) %>% 
+  mutate(p_ant_t = p_agrc_t + p_urbn_t + p_othr_t) %>% 
+  mutate(p_frt_t = p_frst_t + p_wtnd_t) %>% 
+  mutate(p_shb_t = p_shrb_t)
+
+lnd_cvr <- select(lnd_s0,COMID,p_ant,p_frt,p_shb,p_ant_t,p_frt_t,p_shb_t)
+
+lnd_cvr <- lnd_cvr %>% rowwise() %>% 
+  mutate(hl = entropy(c(p_ant,
+                        p_frt,
+                        p_shb),unit = "log")) %>% 
+  mutate(hrl = hl/log(3)) %>% 
+  mutate(ht = entropy(c(p_ant_t,
+                        p_frt_t,
+                        p_shb_t),unit = "log")) %>% 
+  mutate(hrt = ht/log(3)) 
+
+# Let's remove the old land use columns from the biogeochemical dataset before we
+# merge it with the "lnd_cvr" dataset
+
+bgc <- select(dat,COMID,cum_totco2g_m2_day,CAT_STREAM_LENGTH,CAT_STREAM_SLOPE,
+              TOT_STREAM_LENGTH,TOT_STREAM_SLOPE,CAT_BASIN_AREA,TOT_BASIN_AREA,
+              totco2g_m2_day_fill,D50_m,StreamOrde,pred_annual_DOC,pred_annual_DO,
+              no3_conc_mg_l,logRT_total_hz_s,logq_hz_total_m_s,totco2_o2g_m2_day,
+              totco2_ang_m2_day)
+bgc <- rename(bgc,
+              acm_resp = cum_totco2g_m2_day,
+              reach_lgt = CAT_STREAM_LENGTH, 
+              reach_slp = CAT_STREAM_SLOPE,
+              river_lgt = TOT_STREAM_LENGTH,
+              river_slp = TOT_STREAM_SLOPE,
+              reach_area = CAT_BASIN_AREA,
+              wshd_area = TOT_BASIN_AREA,
+              reach_resp = totco2g_m2_day_fill,
+              d50m = D50_m,
+              order = StreamOrde,
+              doc_annual = pred_annual_DOC,
+              do_annual = pred_annual_DO,
+              nitrates = no3_conc_mg_l,
+              res_time = logRT_total_hz_s,
+              hz_exchng = logq_hz_total_m_s,
+              aer_resp = totco2_o2g_m2_day,
+              anb_resp = totco2_ang_m2_day)
+
+#Merging bgc with lnd_cvr
+
+bgc_lnd0 <- merge(bgc,lnd_cvr,by = "COMID") # There are duplicates COMIDs in both 
+#datasets, to filter those out:
+
+bgc_lnd <- unique(bgc_lnd0)
+
+################################################################################
+# Figures
+################################################################################
+
+# Let's start with a quick pairs plot to have a glimpse of the relationships among
+# variables
+
+ggpairs(bgc_lnd)
+
 
 
 #Land-cover categories (2011)
