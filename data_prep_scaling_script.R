@@ -14,7 +14,8 @@
 # To run this code in macos it is necessary to install XQuartz from 
 #www.xquartz.org
 
-librarian::shelf(ggplot2,dplyr,plot3D,plot3Drgl,readr,rgl,tidyverse,entropy,GGally)
+librarian::shelf(ggplot2,dplyr,plot3D,plot3Drgl,readr,rgl,tidyverse,entropy,GGally,
+                 stringr)
 set.seed(2703)
 
 #Data:
@@ -268,7 +269,7 @@ for(i in 1:itn){
   tot_im <- as.matrix(tot_im)[,order(colnames(tot_im))]
   imt <- tot_im[,c(2:7)]/sum(tot_im[,c(2:7)])
   for(j in 1:ncol(imt)){
-    yjn = sum(iml[,j])
+    yjn = sum(imt[,j])
     hn = entropy(imt[,j], unit = "log")
     hmaxn = log(nrow(lnd_et))
     ic_tot[j,1]=yjn
@@ -310,7 +311,9 @@ p5
 p6 <- ggplot(wshd_im,aes(x = reorder(use,-In_l), y = In_l, fill = use, color = use))+
   geom_boxplot(alpha = 0.5)+
   scale_color_manual(values = my_colors)+
-  scale_fill_manual(values = my_colors)
+  scale_fill_manual(values = my_colors)+
+  xlab("Land Use")+
+  ylab("Contribution to landscape heterogeneity\n(as Shannon's entropy")+
 p6
 
 # Information content analysis suggest the following groups (combining information-rich
