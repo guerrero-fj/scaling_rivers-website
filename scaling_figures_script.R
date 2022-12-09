@@ -15,6 +15,8 @@
 # To run this code in macos it is necessary to install XQuartz from 
 #www.xquartz.org
 
+rm()
+
 librarian::shelf(ggplot2,# for plotting
                  dplyr,# for data wrangling
                  plot3D,# for 3D plots
@@ -49,9 +51,9 @@ set.seed(2703)
 # pending!!!!!
 
 #values
-bgc_lnd <- read.csv("data/221206_scaling_lnd_bgc.csv", 
+bgc_cln0 <- read.csv("data/221206_scaling_lnd_bgc.csv", 
                   stringsAsFactors=TRUE)
-bgc_lnd <- as_tibble(bgc_lnd)
+bgc_cln <- as_tibble(na.omit(bgc_cln0))# Removing all NA's 
 
 
 ################################################################################
@@ -61,20 +63,25 @@ bgc_lnd <- as_tibble(bgc_lnd)
 # Let's start with a quick pairs plot to have a glimpse of the relationships among
 # variables
 
-dat_pair <- as_tibble(select(bgc_lnd,acm_resp,river_lgt,reach_area,wshd_area,d50m,order,
+dat_pair <- as_tibble(select(bgc_cln,acm_resp,river_lgt,reach_area,wshd_area,d50m,order,
                              hrt))
 
-dat_pair <- dat_pair %>% 
+paired_plot <- select(bgc_cln,
+                       acm_resp,
+                       river_lgt,
+                       reach_area,
+                       wshd_area,
+                       d50m,order,
+                       hrt) %>% 
   mutate(log_resp = log10(acm_resp)) %>% 
   mutate(log_lgt = log10(river_lgt)) %>% 
   mutate(log_r_area =log10(reach_area)) %>% 
   mutate(log_w_area = log10(wshd_area)) %>% 
-  mutate(log_d50m = log10(d50m)) 
+  mutate(log_d50m = log10(d50m)) %>% 
+  select(c(6:12)) %>% 
+  ggpairs()
+paired_plot
 
-log_dat_pair <- select(dat_pair,c(6:12))
-
-ggpairs(dat_pair)
-ggpairs(log_dat_pair)
 
 # Main chart (drafts)
 
@@ -86,76 +93,38 @@ minor_breaks = rep(1:9,21)*(10^rep(-2:5,each=9))
 # landscape heterogeneity
 # Guiding lines
 
-# option 1: using unique values
-gl_dat <- select(bgc_lnd,wshd_area,acm_resp) %>% 
-  group_by(wshd_area) %>% 
-  summarise(r_mx = max(acm_resp),
-            r_av = mean(acm_resp),
-            r_mn = min(acm_resp))
-
-gl_plot <- ggplot(gl_dat,aes(wshd_area,r_av))+
-  geom_smooth(method="lm")+
-  geom_smooth(aes(wshd_area,r_mx),method = "lm")+
-  geom_smooth(aes(wshd_area,r_mn),method = "lm")+
-  scale_x_log10()+
-  scale_y_log10()
-gl_plot
-
-up_dat <- filter(bgc_lnd,acm_resp>10)
-dw_dat <- filter(bgc_lnd,p_frt_t<0.1 & wshd_area>50)
-
-# Option 2: using residuals from the 1:1 line
-
-rgl_dat <- select(bgc_lnd,wshd_area,acm_resp) %>% 
-  mutate(p_resp = wshd_area) %>% 
-  mutate(rsd = acm_resp - p_resp)
-
-p <- ggplot(filter(rgl_dat,rsd<0 & acm_resp>0.0001),aes(wshd_area,acm_resp))+
-  geom_point(color="black")+
-  geom_smooth()+
-  geom_point(data = filter(rgl_dat,rsd>0 & acm_resp>0.0001),aes(wshd_area,acm_resp),
-             color = "blue")+
-  geom_smooth(data = filter(rgl_dat,rsd>0 & acm_resp>0.0001),aes(wshd_area,acm_resp))+
-  scale_x_log10()+
-  scale_y_log10()
-p
-
-# Option 3: Identifying covariates that could segregate the scaling behaviors
-
-p <- ggplot(na.omit(bgc_lnd),aes(wshd_area,acm_resp,color=res_time))+
-  geom_point()+
-  geom_point(data=filter(na.omit(bgc_lnd),res_time>7),aes(wshd_area,acm_resp),
-             color="black",inherit.aes = FALSE)+
-  geom_smooth(data=filter(na.omit(bgc_lnd),res_time>7),aes(wshd_area,acm_resp),
-             color="black",method="lm",inherit.aes = FALSE)+
-  geom_point(data=filter(na.omit(bgc_lnd),res_time<4),aes(wshd_area,acm_resp),
-             color="black",inherit.aes = FALSE)+
-  geom_smooth(data=filter(na.omit(bgc_lnd),res_time<4),aes(wshd_area,acm_resp),
-              color="green",method="lm",inherit.aes = FALSE)+
-  geom_abline(slope=1)+
-  scale_x_log10()+
-  scale_y_log10()
-p
-
-###############################################################################
-# REMOVING NAs FROM OUR DATA SET GLOBALLY
-bgc_cln <- as_tibble(na.omit(bgc_lnd))
-###############################################################################
-
-# let's take a look at the distribution of values for residence time
-
-
-rs_box <- ggplot(na.omit(bgc_lnd),aes(y=res_time))+
-  geom_boxplot()
-rs_box
-
-summary(bgc_cln$res_time)
 
 # let's now create a categorical variable for residence time using the quartiles
 
 bgc_cln$rt_cat <- cut(bgc_cln$res_time,
                       breaks=c(1,4,4.6,4.8,5,5.2,5.4,5.6,5.8,6,7,8,9),
-                      labels = c("a","b","c","d","e","f","g","h","i","j","k","l"))
+                      labels = c("HZ<","b","c","d","e","f","g","h","i","j","k","l"))
+
+s_breaks <- c(2.0,  3.70, 3.95, 4.20, 4.45, 4.70, 4.95, 5.20, 5.45, 5.70, 5.95,
+              6.20, 6.45, 6.70, 6.95, 7.20, 9.00)
+              
+
+s_labels0 <-c("Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_",
+              "Rt_","Rt_","Rt_","Rt_","Rt_","Rt_")
+              
+
+s_labels1 <- paste(s_labels0, s_breaks, sep = '')
+
+s_labels <- s_labels1[2:17]
+
+bgc_cln$srt_cat <- cut(bgc_cln$res_time,
+                       breaks = s_breaks,
+                       labels = s_labels)
+
+# Creating a quasi-sequential color palette for discrete categories
+# Source: https://www.ibm.com/design/language/color/
+
+my_dcolors <- c("#edf5ff","#e5f6ff","#d0e2ff","#bae6ff","#a6c8ff","#82cfff","#78a9ff",
+                "#33b1ff","#4589ff","#1192e8","#0f62fe","#0072c3","#0043ce","#00539a",
+                "#002d9c","#003a6d","#001d6c","#012749","#001141","#061727")
+
+
+
 
 
 p <- ggplot(bgc_cln,aes(wshd_area,acm_resp,color=rt_cat))+
@@ -167,6 +136,15 @@ p <- ggplot(bgc_cln,aes(wshd_area,acm_resp,color=rt_cat))+
   facet_wrap(~rt_cat)
 p
 
+p <- ggplot(bgc_cln,aes(wshd_area,acm_resp,color=srt_cat))+
+  geom_point(alpha=0.7)+
+  geom_smooth(method="lm",se=FALSE, fullrange=TRUE,linetype="dashed",size=0.45)+
+  scale_color_manual(values = my_dcolors)+
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_abline(slope=1.0, color = "red")+
+  facet_wrap(~srt_cat)
+p
 
 # relationship between residence time and slope
 p <- ggplot(bgc_cln,aes(reach_slp,res_time))+
@@ -179,105 +157,209 @@ p
 
 # Creating a matrix for results
 
+# Stratified Resampling
+
+stratified <- bgc_cln %>% 
+  group_by(srt_cat) %>% 
+  slice_sample(n=ssz,replace=TRUE) %>% 
+  mutate(slope = as.numeric(summary(lm(log(acm_resp)~log(wshd_area)))$coefficients[2]))
+
+p <- ggplot(stratified,aes(hrt,slope))+
+  # scale_x_log10()+
+  # scale_y_log10()+
+  geom_point()
+p
+
+stratified_a <- bgc_cln %>% 
+  group_by(rt_cat) %>% 
+  slice_sample(n=ssz,replace=TRUE) %>% 
+  mutate(slope = as.numeric(summary(lm(log(acm_resp)~log(wshd_area)))$coefficients[2])) %>% 
+  ggplot(aes(hrt,slope))+
+  # scale_x_log10()+
+  # scale_y_log10()+
+  geom_point()
+stratified_a
+
+
+
+p <- ggplot(stratified,aes(wshd_area,acm_resp,color = srt_cat))+
+  geom_point(alpha = 0.5)+
+  geom_smooth(method = "lm",se=FALSE)+
+  scale_x_log10()+
+  scale_y_log10()+
+  geom_abline(slope=1,color = "red", linetype = "dashed", size = 1.2)+
+  facet_wrap(~srt_cat)
+p
+
+gb <- ggplot_build(p)
+
 # Number of iterations 
-rtc = levels(bgc_cln$rt_cat)
+rtc = levels(bgc_cln$srt_cat)
 cls = 12
-itn = 1:13
+itn = 1:1000
 
 ncols = 11
 nrows = length(itn)
 ssz = 100
-scl_exp <- matrix(1:nrows,nrows,ncols, 
-                  dimnames = list(NULL, c("ant_avg",
-                                          "frt_avg",
-                                          "ht_avg",
-                                          "p_exp", 
-                                          "p_mod",                   
-                                          "r_squared",
-                                          "reach_slp",
-                                          "res_median",
-                                          "rt_cat",
-                                          "s_exponent",
-                                          "shb_avg")))
 
-exp_list <- list()
 
+# Make an empty tibble with all the column headers, plus the iteration.
+scl_results <- tibble(category = as.character(),
+                          iteratn = as.numeric(),
+                          wsa_avg = as.numeric(),
+                          rsp_avg = as.numeric(),
+                          hzt_avg = as.numeric(),
+                          ant_avg = as.numeric(),
+                          frt_avg = as.numeric(),
+                          shb_avg = as.numeric(),
+                          hrt_avg = as.numeric(),
+                          scl_exp = as.numeric(),
+                          scl_int = as.numeric(),
+                          pvl_exp = as.numeric(),
+                          pvl_mod = as.numeric(),
+                          r_sqard = as.numeric(),
+                          rch_slp = as.numeric(),
+                          riv_slp = as.numeric(),
+                          res_mdn = as.numeric())
 
 for (i in rtc){
   for( j in itn){
-    dat <- bgc_cln %>% filter(rt_cat==i)
+    dat <- bgc_cln %>% filter(srt_cat==i)
     tst = dat[sample(nrow(dat),size=ssz,replace = TRUE),]
     sm <- lm(log(acm_resp)~log(wshd_area),data =tst)
     st <- summary(sm)
     rsq <- as.numeric(st$r.squared)
+    int <- as.numeric(sm$coefficients[1])
     slp <- as.numeric(sm$coefficients[2])
     mrs <- as.numeric(median(sm$residuals))
-    p_int <- as.numeric(st$coefficients[2,4])
+    p_slp <- as.numeric(st$coefficients[2,4])
     p_mod <- as.numeric(pf(st$fstatistic[1],         
                            st$fstatistic[2], 
                            st$fstatistic[3], 
                            lower.tail = FALSE))
+    wsa <- mean(tst$wshd_area)
+    rsp <- mean(tst$acm_resp)
+    hzt <- mean(tst$res_time)
     ant <- mean(tst$p_ant_t)
     frt <- mean(tst$p_frt_t)
     shb <- mean(tst$p_shb_t)
     hrt <- mean(tst$hrt)
-    rsp <- mean(tst$reach_slp)
-    # crt <- i
-    scl_exp[j,1] <- ant
-    scl_exp[j,2] <- frt
-    scl_exp[j,3] <- hrt
-    scl_exp[j,4] <- p_int
-    scl_exp[j,5] <- p_mod
-    scl_exp[j,6] <- rsq
-    scl_exp[j,7] <- rsp
-    scl_exp[j,8] <- mrs
-    scl_exp[j,9] <- mrs#fix this 
-    scl_exp[j,10] <- slp
-    scl_exp[j,11] <- shb
+    ssl <- mean(tst$reach_slp)
+    rsl <- mean(tst$river_slp)
+    row <- tibble(category = i, 
+                  iteratn =j, 
+                  wsa_avg = wsa,
+                  rsp_avg = rsp,
+                  hzt_avg = hzt,
+                  ant_avg = ant,
+                  frt_avg = frt,
+                  shb_avg = shb,
+                  hrt_avg = hrt,
+                  scl_int = int,
+                  scl_exp = slp,
+                  pvl_exp = p_slp,
+                  pvl_mod = p_mod,
+                  r_sqard = rsq,
+                  rch_slp = rsp,
+                  riv_slp = rsl,
+                  res_mdn = mrs)
+   scl_results <- scl_results %>% add_row(row)
   }
-  exp_list[[which(rtc==i)]] <- scl_exp
 }
 
+scl_lines <- scl_results %>% 
+  select(category,scl_exp,scl_int,r_sqard,pvl_exp,pvl_mod,hzt_avg) %>% 
+  filter(r_sqard>0.8 & pvl_mod < 0.001) %>% 
+  group_by(category) %>% 
+  summarise(m_scl_exp = mean(scl_exp),
+            m_scl_int = mean(scl_int),
+            m_rsq = mean(r_sqard),
+            m_pex = mean(pvl_exp),
+            m_pmd = mean(pvl_mod),
+            m_hzt = mean(hzt_avg))
+
+p_exp <- ggplot(scl_lines,aes(m_hzt,m_scl_exp))+
+  geom_point()+
+  geom_smooth(span = 0.95)+
+  xlab("Average Residence time (1k-resampling)")+
+  ylab("Average Scaling Exponent (1k-resampling)")+
+  geom_hline(yintercept = 1.0,linetype = "dashed", size = 1.0, color = "red")
+p_exp
+
+p_int <- ggplot(scl_lines,aes(m_hzt,m_scl_int))+
+  geom_point()+
+  geom_smooth(span = 0.95)+
+  xlab("Average Residence time (1k-resampling)")+
+  ylab("Average Intercept (1k-resampling)")+
+  geom_hline(yintercept = 0.0,linetype = "dashed", size = 1.0, color = "red")
+p_int
+
+p_int <- ggplot(scl_lines,aes(m_hzt,m_scl_exp))+
+  geom_point()+
+  geom_smooth()
+p_int
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+p_mres <- ggplot(scl_results,aes(x = category, y = scl_exp))+
+  geom_boxplot()+
+  geom_point(aes(alpha=0.002))+
+  geom_smooth()+
+  scale_y_log10()+
+  # scale_color_manual(values = my_dcolors)+
+  geom_hline(yintercept = 1,color="red")
+p_mres
+  
+  
+  
 ###############################################################################
 #FIGURES
 ###############################################################################
+# Creating breaks for logarithmic scale 
+# (see: https://r-graphics.org/recipe-axes-axis-log)
 
-p1 <- ggplot(na.omit(bgc_cln),aes(wshd_area, acm_resp, color = rt_cat))+
+breaks <- 10^(-10:10)
+minor_breaks <- rep(1:9, 21)*(10^rep(-10:10, each=9))
+
+
+ p0 <- ggplot(bgc_cln,aes(wshd_area, acm_resp, color = rt_cat))+
+     # geom_point()+
+     geom_smooth(method = "lm", se=FALSE)+
+     # geom_point(aes(alpha = hrt), size = 2.5)+
+     # geom_smooth(data = filter(rgl_dat,rsd>0 & acm_resp>100),aes(wshd_area,acm_resp),
+     #             method = "lm")+
+     # geom_smooth(data = filter(rgl_dat,rsd<0 & wshd_area>50),aes(wshd_area,acm_resp),
+     #             method = "lm")+
+     scale_x_log10(breaks = breaks, minor_breaks = minor_breaks, 
+                                     labels = trans_format("log10", math_format(10^.x)))+
+     scale_y_log10(breaks = breaks, minor_breaks = minor_breaks,
+                                     labels = trans_format("log10", math_format(10^.x)))+
+     xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+     ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+     annotation_logticks(size = 0.75, sides = "tblr")+
+     # scale_color_distiller("Hyporheic\nexchange",palette = "Blues",direction = 1,
+     #                       breaks = c(0.0,0.25,0.50, 0.75,1.0), limits =c(0,1))+
+     geom_abline(slope =0.85,yintercept = 10000, size = 0.75, linetype = "dashed", color="red")+
+     geom_vline(xintercept = 0.01, linetype = "dotted")+
+     geom_hline(yintercept = 0.01, linetype = "dotted")+
+     guides(alpha = "none")+
+     theme_httn+
+     theme(axis.text=element_text(colour="black",size=16),
+                     axis.title = element_text(size = 24, face = "bold"),
+                     legend.text = element_text(size = 12),
+                     legend.title = element_text(face="bold", size = 16),
+                     plot.background = element_blank())
+p0
+
+
+p <- ggplot(scl_results,aes(hzt_avg,scl_exp))+
   geom_point()+
-  # geom_smooth(method = "lm")+
-  # geom_point(aes(alpha = hrt), size = 2.5)+
-  # geom_smooth(data = filter(rgl_dat,rsd>0 & acm_resp>100),aes(wshd_area,acm_resp),
-  #             method = "lm")+
-  # geom_smooth(data = filter(rgl_dat,rsd<0 & wshd_area>50),aes(wshd_area,acm_resp),
-  #             method = "lm")+
+  geom_smooth()
+p
+
+
+p1 <- ggplot(bgc_cln,aes(wshd_area, acm_resp, color = hrt))+
+  geom_point()+
+  geom_point(aes(alpha = hrt), size = 2.5)+
   scale_x_log10(breaks = breaks, minor_breaks = minor_breaks, 
                 labels = trans_format("log10", math_format(10^.x)))+
   scale_y_log10(breaks = breaks, minor_breaks = minor_breaks, 
@@ -285,19 +367,25 @@ p1 <- ggplot(na.omit(bgc_cln),aes(wshd_area, acm_resp, color = rt_cat))+
   xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
   ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
   annotation_logticks(size = 0.75, sides = "tblr")+
-  # scale_color_distiller("Landscape\nheterogeneity",palette = "Blues",direction = 1,
-  #                       breaks = c(0.0,0.25,0.50, 0.75,1.0), limits =c(0,1))+
-  geom_abline(slope =0.85,yintercept = 10000, size = 0.75, linetype = "dashed", color="red")+
-  geom_vline(xintercept = 0.01, linetype = "dotted")+
-  geom_hline(yintercept = 0.01, linetype = "dotted")+
+  scale_color_distiller("Landscape\nheterogeneity",palette = "Blues",direction = 1,
+                        breaks = c(0.0,0.25,0.50, 0.75,1.0), limits =c(0,1))+
+  geom_abline(slope =1.00, size = 0.75, linetype = "dashed", color="red")+
+  geom_smooth()
+  # geom_abline(slope =1.02, intercept =  2.63, size = 0.75, linetype = "dashed")+
+  # geom_abline(slope =1.33, intercept =  0.88, size = 0.75, linetype = "dashed")+
+  # geom_abline(slope =1.61, intercept = -0.70, size = 0.75, linetype = "dashed")+
+  # geom_abline(slope =1.77, intercept = -1.68, size = 0.75, linetype = "dashed")+
+  # geom_abline(slope =1.94, intercept = -4.18, size = 0.75, linetype = "dashed")+
+  # geom_abline(slope =2.04, intercept = -6.72, size = 0.75, linetype = "dashed")+
+  # geom_abline(slope =2.09, intercept = -5.32, size = 0.75, linetype = "dashed")+
+  # geom_abline(slope =2.14, intercept = -7.85, size = 0.75, linetype = "dashed")+
   guides(alpha = "none")+
   theme_httn+
   theme(axis.text=element_text(colour="black",size=16),
         axis.title = element_text(size = 24, face = "bold"),
         legend.text = element_text(size = 12),
         legend.title = element_text(face="bold", size = 16),
-        plot.background = element_blank())+
-  facet_wrap(~rt_cat)
+        plot.background = element_blank())
 p1
 
 ggsave(file="guerrero_etal_22_scaling_landscape_entropy.png",
@@ -397,400 +485,6 @@ ggsave(file="guerrero_etal_22_scaling_humanscapes_cover.png",
        units = "in")
 
 
-################################################################################
-# Scaling exponents behavior
-################################################################################
-
-exp <- select(bgc_lnd,
-              acm_resp,
-              wshd_area,
-              p_ant_t,
-              p_frt_t,
-              p_shb_t,
-              hrt)
-
-exp <- filter(exp,acm_resp>0 & wshd_area>0)
-
-sm <- lm(log(acm_resp)~log(wshd_area),data =na.omit(exp))
-st <- summary(sm)
-
-# Extracting stats from linear regression 
-# (see:https://statisticsglobe.com/extract-standard-error-t-and-p-value-from-regression-in-r )
-# see: https://machinelearningmastery.com/degrees-of-freedom-in-machine-learning/#:~:text=can%20be%20determined.-,Total%20Degrees%20of%20Freedom%20for%20Linear%20Regression,model%20error%20degrees%20of%20freedom.&text=Generally%2C%20the%20degrees%20of%20freedom,used%20to%20fit%20the%20model.
-
-
-rsq <- as.numeric(st$r.squared)# r squared
-slp <- as.numeric(sm$coefficients[2])# scaling exponent (i.e. slope)
-mrs <- as.numeric(median(sm$residuals))# median of residuals
-p_int <- as.numeric(st$coefficients[2,4])#p-value intercept
-p_mod <- as.numeric(pf(st$fstatistic[1], # F-statistic             
-            st$fstatistic[2], # Model degrees of freedom (params -1)
-            st$fstatistic[3], # Model error degrees of freedom (N-1)
-            lower.tail = FALSE))# p-value overall model
-
-
-# Creating a matrix for results
-
-ncols = 9
-nrows = 1
-ssz = 100
-scl_exp <- matrix(1:nrows,nrows,ncols, 
-                 dimnames = list(NULL, c("ant_avg",
-                                         "frt_avg",
-                                         "ht_avg",
-                                         "p_exp", 
-                                         "p_mod",                   
-                                         "r_squared",
-                                         "res_median",
-                                         "s_exponent",
-                                         "shb_avg")))
-
-exp_list <- list()
-
-
-# Number of iterations 
-
-
-itn = 1000
-
-for(i in 1:itn){
-  if (i == itn +1){
-    break
-  }
-  scl_st <- exp[sample(nrow(exp),size=600,replace = TRUE),]
-  sm <- lm(log(acm_resp)~log(wshd_area),data =na.omit(scl_st))
-  st <- summary(sm)
-  rsq <- as.numeric(st$r.squared)
-  slp <- as.numeric(sm$coefficients[2])
-  mrs <- as.numeric(median(sm$residuals))
-  p_int <- as.numeric(st$coefficients[2,4])
-  p_mod <- as.numeric(pf(st$fstatistic[1],         
-                           st$fstatistic[2], 
-                           st$fstatistic[3], 
-                           lower.tail = FALSE))
-  ant <- mean(scl_st$p_ant_t)
-  frt <- mean(scl_st$p_frt_t)
-  shb <- mean(scl_st$p_shb_t)
-  hrt <- mean(scl_st$hrt)
-  scl_exp[,1]=ant
-  scl_exp[,2]=frt
-  scl_exp[,3]=hrt
-  scl_exp[,4]=p_int
-  scl_exp[,5]=p_mod
-  scl_exp[,6]=rsq
-  scl_exp[,7]=mrs
-  scl_exp[,8]=slp
-  scl_exp[,9]=shb
-exp_list[[i]] <- scl_exp
-}
-
-scaling_exp <- as_tibble(do.call("rbind",exp_list))
-scaling_exp <- select(scaling_exp,
-                      ant_avg,
-                      frt_avg,
-                      shb_avg,
-                      ht_avg,
-                      s_exponent,
-                      p_exp,
-                      p_mod,
-                      r_squared,
-                      res_median)
-glimpse(scaling_exp)
-summary(scaling_exp$r_squared)
-summary(scaling_exp$frt_avg)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# # P2 shows that for segments under land cover closer to 100% forest, the scaling
-# # exponents would be >1, i.e. superlinear scaling. While in lands with no forest
-# # cover, the scaling exponents seems to be sublinear.
-# 
-# p3 <- ggplot(na.omit(bgc_lnd),aes(p_ant_t,hrt,color = hrt))+
-#   geom_point()
-# p3
-# 
-# p4 <- ggplot(na.omit(bgc_lnd),aes(p_ant_t,p_frt_t,color=log(acm_resp)))+
-#   geom_point()
-# p4
-# 
-# # 
-# 
-# with(na.omit(bgc_lnd),scatter3D(p_frt_t,p_shb_t,hrl,bty ='b2',
-#                    colvar = do_annual,
-#                    clab=c("Dissolved Oxygen"), 
-#                    theta = 15, phi =20, main = "Landscape Heterogeneity", 
-#                    xlab = "Mixed cover", ylab = "Natural cover",
-#                    zlab = "Relative entropy"))
-# plotrgl()
-# 
-# 
-# 
-# 
-# #Land-cover categories (2011)
-# thd <- 0.8
-# 
-# 
-# # Local drainage area
-# lnd_m$use_loc <- as.factor(with(lnd_m,ifelse(p_urbn>thd,"Urban",
-#                                              ifelse(p_frst>thd,"Forest",
-#                                                     ifelse(p_wtnd>thd,"Wetland",
-#                                                            ifelse(p_agrc>thd,"Agriculture",
-#                                                                   ifelse(p_shrb>thd,"Shrubland",
-#                                                                          "Mixed covers")))))))
-# 
-# # Total drainage area
-# lnd_m$use_acm <- as.factor(with(lnd_m,ifelse(p_urbn_t>thd,"Urban",
-#                                              ifelse(p_frst_t>thd,"Forest",
-#                                                     ifelse(p_wtnd_t>thd,"Wetland",
-#                                                            ifelse(p_agrc_t>thd,"Agriculture",
-#                                                                   ifelse(p_shrb_t>thd,"Shrubland",
-#                                                                          "Mixed covers")))))))
-# 
-# 
-# # Color scale
-# 
-# # Let's define a color scale for our plots using a basic density plot for local 
-# # entropies
-# 
-# 
-# colors <- ggplot_build(lnd_m %>% ggplot(aes(hr_loc, color = use_loc, fill = use_loc))+
-#                          geom_density(alpha = 0.5))
-# unique(colors$data[[1]]$fill)
-# 
-# my_colors <- c("#F564E3","#00BA38","#F8766D","#B79F00","#619CFF","#00BFC4")
-# 
-# p1 <- ggplot(lnd_m,aes(hr_loc,hr_acm, color = use_acm))+
-#   geom_point()+
-#   scale_color_manual(values = my_colors)
-# p1
-# 
-# p2 <- ggplot(lnd_m, aes(hr_loc, color = use_loc, fill = use_loc))+
-#   geom_density(alpha = 0.5)+
-#   scale_fill_manual(values = my_colors)+
-#   scale_color_manual(values = my_colors)+
-#   facet_wrap(~use_loc)
-# p2
-# 
-# 
-# #exploratory plots
-# 
-# # Slope distribution (segments)
-# slp.p <- ggplot(dat,aes(TOT_STREAM_SLOPE))+
-#   geom_vline(xintercept = 0.01425)+
-#   geom_density()+
-#   scale_x_log10()
-# slp.p
-# 
-# # # Raw slope data
-# # dat %>% ggplot(aes(CAT_STREAM_SLOPE, fill = lnd_cat))+
-# #   geom_density(alpha = 0.5)+
-# #   geom_vline(xintercept = 0.01425, linetype = "dashed")+
-# #   scale_x_log10()+
-# #   guides(fill = guide_legend(title="Land use type"))
-# # 
-# # #color scale
-# # colors <- ggplot_build(dat %>% ggplot(aes(CAT_STREAM_SLOPE, fill = lnd_cat))+
-# #                geom_density(alpha = 0.5)+
-# #                geom_vline(xintercept = 0.01425, linetype = "dashed")+
-# #                scale_x_log10()+
-# #                guides(fill = guide_legend(title="Land use type")))
-# # unique(colors$data[[1]]$fill)
-# 
-# # Raw slope data (color scale)
-# dat %>% ggplot(aes(TOT_STREAM_SLOPE, fill = lnd_cat))+
-#   geom_density(alpha = 0.5)+#scale densities
-#   geom_vline(xintercept = 0.01425, linetype = "dashed")+
-#   scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3"))+
-#   scale_x_log10()+
-#   guides(fill = guide_legend(title="Land use type"))
-# 
-# 
-# # Area distribution (segments)
-# are.p <- ggplot(dat,aes(CAT_BASIN_AREA, fill = lnd_cat))+
-#   geom_density(alpha = 0.5)+
-#   scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3", "gray"))+
-#   scale_x_log10()+
-#   guides(fill = guide_legend(title="Land use type"))
-# are.p
-# 
-# # Area distribution excluding urban and wetlands
-# dat %>% 
-#   filter(lnd_cat %in% c("Forest", "Agriculture", "Shrubland", "Mixed covers")) %>%
-#   ggplot(aes(CAT_BASIN_AREA, fill = lnd_cat))+
-#   geom_density(alpha = 0.5)+
-#   scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3", "gray"))+
-#   scale_x_log10()+
-#   guides(fill = guide_legend(title="Land use type"))
-# 
-# 
-# # Stream length distribution (cumulative at drainage point)
-# lgt.p <- ggplot(dat,aes(length_m, fill = lnd_cat))+
-#   geom_density(alpha = 0.5)+
-#   scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3", "gray"))+
-#   scale_x_log10()+
-#   guides(fill = guide_legend(title="Land use type"))
-# lgt.p
-# 
-# # Stream length distribution excluding urban and wetlands
-# dat %>% 
-#   filter(lnd_cat %in% c("Forest", "Agriculture", "Shrubland", "Mixed covers")) %>%
-#   ggplot(aes(length_m, fill = lnd_cat))+
-#   geom_density(alpha = 0.5)+
-#   scale_fill_manual(values = c("#F8766D", "#00BF7D","#A3A500", "#00B0F6", "#E76BF3", "gray"))+
-#   scale_x_log10()+
-#   guides(fill = guide_legend(title="Land use type"))
-# 
-# # Entropy and area
-# p2 <- ggplot(dat,aes(AreSqKM,h_rel_3))+
-#   geom_point()+
-#   scale_x_log10()
-# p2
-# 
-# 
-# 
-# # Scaling relationships by land cover
-# 
-# ## Area and stream length 
-# 
-# dat %>% 
-#   filter(lnd_cat %in% c("Forest", "Agriculture", "Shrubland", "Mixed covers")) %>%
-#   filter(cum_totco2g_m2_day>0)%>%
-#   ggplot(aes(CAT_BASIN_AREA,length_m,color=lnd_cat))+
-#   xlab("Watershed Area")+
-#   ylab("Stream length")+
-#   geom_point(alpha = 0.05)+
-#   geom_smooth(method = "lm", se = FALSE)+
-#   geom_abline(slope = 1, color = "darkred",linetype = "longdash", size =0.75)+
-#   scale_x_log10()+
-#   scale_y_log10()+
-#   guides(color = guide_legend(title="Land use type"))
-# 
-# 
-# ## Area and Discharge
-# 
-# # Since predicted discharge at a single location is cumulative, it should correlate
-# # with the watershed area up to that point
-# 
-# dat %>% 
-#   filter(lnd_cat %in% c("Forest", "Agriculture", "Shrubland", "Mixed covers")) %>%
-#   filter(cum_totco2g_m2_day>0)%>%
-#   ggplot(aes(TOT_BASIN_AREA,logQ_m3_div_s,color=lnd_cat))+
-#   geom_abline(slope = 1, color = "darkred",linetype = "longdash", size =0.75)+
-#   xlab("Watershed Area")+
-#   ylab("Log [Predicted Discharge]")+
-#   geom_point(alpha = 0.05)+
-#   geom_smooth(method = "lm", se = FALSE)+
-#   scale_x_log10()+
-#   # scale_y_log10()+
-#   guides(color = guide_legend(title="Land use type"))+
-#   facet_wrap(~lnd_cat)
-# 
-# ## Area and Slope
-# 
-# dat %>% 
-#   filter(lnd_cat %in% c("Forest", "Agriculture", "Shrubland", "Mixed covers")) %>%
-#   filter(cum_totco2g_m2_day>0)%>%
-#   ggplot(aes(TOT_BASIN_AREA,CAT_STREAM_SLOPE,color=lnd_cat))+
-#   xlab("Watershed Area")+
-#   ylab("Local Stream Slope")+
-#   geom_point(alpha = 0.05)+
-#   geom_smooth(method = "lm",se = FALSE, span = 0.5)+
-#   scale_x_log10()+
-#   scale_y_log10()+
-#   guides(color = guide_legend(title="Land use type"))+
-#   facet_wrap(~lnd_cat)
-# 
-# # Watershed area and cummulative metabolic rate
-# 
-# dat %>% 
-#   filter(lnd_cat %in% c("Forest", "Agriculture", "Shrubland", "Mixed covers")) %>%
-#   filter(cum_totco2g_m2_day>0)%>%
-#   ggplot(aes(TOT_BASIN_AREA,cum_totco2g_m2_day,color=lnd_cat))+
-#   xlab("Watershed Area")+
-#   ylab("Cummulative respiration rates")+
-#   geom_point(alpha = 0.05)+
-#   geom_smooth(method = "lm")+
-#   geom_abline(slope = 1, color = "darkred",linetype = "longdash", size =0.75)+
-#   scale_x_log10()+
-#   scale_y_log10()+
-#   facet_wrap(~lnd_cat)+
-#   theme(legend.position = "none",
-#         strip.background = element_blank(),
-#         strip.text.x = element_text(size = 12, hjust = 0),
-#         axis.text.x = element_blank(),
-#         axis.text.y = element_blank(),
-#         axis.title = element_text(size=14))
-# 
-# # Role of landscape heterogeneity
-# 
-# dat %>% 
-#   filter(lnd_cat %in% c("Mixed covers")) %>%
-#   filter(cum_totco2g_m2_day>0)%>%
-#   ggplot(aes(TOT_BASIN_AREA,cum_totco2g_m2_day, color = h_rel_3))+
-#   xlab("Watershed Area")+
-#   ylab("Cummulative respiration rates")+
-#   # geom_point(alpha = 0.05)+
-#   geom_point()+
-#   geom_abline(slope = 1, color = "darkred",linetype = "longdash", size =0.75)+
-#   scale_x_log10()+
-#   scale_y_log10()
-# 
 # # Entropy plot
 # 
 # with(dat,scatter3D(tot_other_3,tot_ntrl_3,h_rel_3,bty ='b2',
