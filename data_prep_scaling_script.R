@@ -152,7 +152,8 @@ lnd <- lnd %>% rowwise() %>%
 p4 <- ggplot(lnd,aes(hrl,hrt))+
   geom_point()
 p4
-  
+
+
 # Information content analysis
 
 # Using Shannon's entropy calculations, we could identify which land use types 
@@ -190,7 +191,7 @@ ub_list <- list()
 wt_list <- list()
 
 # Number of iterations 
-itn = 5000
+itn = 100
 
 for(i in 1:itn){
   if (i == itn +1){
@@ -259,7 +260,7 @@ ubt_list <- list()
 wtt_list <- list()
 
 # Number of iterations 
-itn = 5000
+itn = 100
 
 for(i in 1:itn){
   if (i == itn +1){
@@ -313,7 +314,7 @@ p6 <- ggplot(wshd_im,aes(x = reorder(use,-In_l), y = In_l, fill = use, color = u
   scale_color_manual(values = my_colors)+
   scale_fill_manual(values = my_colors)+
   xlab("Land Use")+
-  ylab("Contribution to landscape heterogeneity\n(as Shannon's entropy")+
+  ylab("Contribution to landscape heterogeneity\n(as Shannon's entropy)")
 p6
 
 # Information content analysis suggest the following groups (combining information-rich
@@ -373,6 +374,17 @@ bgc <- rename(bgc,
               hz_exchng = logq_hz_total_m_s,
               aer_resp = totco2_o2g_m2_day,
               anb_resp = totco2_ang_m2_day)
+
+#Merging with lnd_s0
+
+bgc_lnds0 <- as_tibble(unique(merge(bgc,lnd_cvr,by = "COMID")))
+
+p <- ggplot(bgc_lnds0,aes(wshd_area,acm_resp,color=hrt))+
+  geom_point(aes(alpha=hrt))+
+  scale_x_log10()+
+  scale_y_log10()
+p
+
 
 #Merging bgc with lnd_cvr
 
