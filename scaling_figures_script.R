@@ -53,7 +53,17 @@ set.seed(2703)
 #values
 bgc_cln0 <- read.csv("data/221206_scaling_lnd_bgc.csv", 
                   stringsAsFactors=TRUE)
-bgc_cln <- as_tibble(na.omit(bgc_cln0))# Removing all NA's 
+bgc_cln <- as_tibble(na.exclude(bgc_cln0))# Removing all NA's 
+
+# There are extremely low values resulting from the calculation of hrt
+
+bgc_cln <- bgc_cln %>% 
+  mutate(hrt = if_else(ht==0,0,hrt))
+
+summary(bgc_cln)
+
+# The original data needs to be tidy up with respect to factor levels for land 
+# cover
 
 
 ################################################################################
@@ -63,88 +73,965 @@ bgc_cln <- as_tibble(na.omit(bgc_cln0))# Removing all NA's
 # Let's start with a quick pairs plot to have a glimpse of the relationships among
 # variables
 
-dat_pair <- as_tibble(select(bgc_cln,acm_resp,river_lgt,reach_area,wshd_area,d50m,order,
-                             hrt))
+# Respiration and physical variables
+
+# adding a smooth loess to the paired
+
+# how to: https://stackoverflow.com/questions/35085261/how-to-use-loess-method-in-ggallyggpairs-using-wrap-function
+
+my_fn <- function(data, mapping, pts=list(), smt=list(), ...){
+  ggplot(data = data, mapping = mapping, ...) + 
+    do.call(geom_point, pts) +
+    do.call(geom_smooth, smt) 
+}
 
 paired_plot <- select(bgc_cln,
-                       acm_resp,
-                       river_lgt,
-                       reach_area,
-                       wshd_area,
-                       d50m,order,
-                       hrt) %>% 
+                      acm_resp,
+                      wshd_area,
+                      d50m,
+                      order,
+                      res_time,
+                      hz_exchng) %>% 
   mutate(log_resp = log10(acm_resp)) %>% 
-  mutate(log_lgt = log10(river_lgt)) %>% 
-  mutate(log_r_area =log10(reach_area)) %>% 
   mutate(log_w_area = log10(wshd_area)) %>% 
   mutate(log_d50m = log10(d50m)) %>% 
-  select(c(6:12)) %>% 
-  ggpairs()
-paired_plot
+  select(c(4:9)) %>% 
+  ggpairs(lower = list(continuous = 
+                         wrap(my_fn,
+                              pts=list(size=0.1, colour="gray"), 
+                              smt=list(method="loess", se=F, size=1, colour="blue",span=0.8))))
+# paired_plot
+# 
+# ggsave(file="guerrero_etal_22_scaling_respiration_physical.png",
+#        width = 15,
+#        height = 10,
+#        units = "in")
+
+# Respiration and biogeochemical variables
+
+paired_plot_b <- select(bgc_cln,
+                      acm_resp,
+                      doc_annual,
+                      do_annual,
+                      nitrates,
+                      aer_resp,
+                      anb_resp) %>% 
+  mutate(log_resp = log10(acm_resp)) %>% 
+  mutate(log_doc = log10(doc_annual)) %>% 
+  mutate(log_do = log10(do_annual)) %>%
+  mutate(log_no3t = log10(nitrates)) %>% 
+  mutate(log_ae_resp = log10(aer_resp)) %>% 
+  mutate(log_an_resp = log10(anb_resp)) %>% 
+  select(c(7:12)) %>% 
+  ggpairs(lower = list(continuous = 
+                         wrap(my_fn,
+                              pts=list(size=0.1, colour="gray"), 
+                              smt=list(method="loess", se=F, size=1, colour="blue",span=0.8))))
+# paired_plot_b
+# 
+# ggsave(file="guerrero_etal_22_scaling_respiration_biogeochem.png",
+#        width = 15,
+#        height = 10,
+#        units = "in")
 
 
-# Main chart (drafts)
+# let's explore relationships with continuous variables expressed as categories for 
+# easier visualization
 
-# Creating breaks for logarithmic scale (see: https://r-graphics.org/recipe-axes-axis-log)
+# generating categories for both physical and biogeochemical variables usinge quartiles
 
-breaks = 10^(-2:5)
-minor_breaks = rep(1:9,21)*(10^rep(-2:5,each=9))
+# to do so, we first customize the quartiles we want to be used
+
+quarts <- c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1.0)
+qlabel <- c("Q10","Q20","Q30","Q40","Q50","Q60","Q70","Q80+")
+
+# DOC requires specific quatrs and qlabels
+# 
+# doc_quarts <- c(0,0.4,0.5,0.6,0.7,0.8,1.0)
+# doc_qlabel <- c("Q40","Q50","Q60","Q70","Q80","Q90")
+
+# NEED TO REVIEW QUARTILES RESULTS FOR BGC variables, EXCLUDING IT FROM THE ANALYSIS FOR THE
+# MOMENT
+
 
 # landscape heterogeneity
-# Guiding lines
+
+bgc_cln <- bgc_cln %>% 
+  mutate(ent_cat = cut(hrt,breaks=quantile(hrt,probs=quarts),labels=qlabel)) %>% 
+  mutate(rst_cat = cut(res_time,breaks=quantile(res_time,probs=quarts),labels=qlabel)) %>%  
+  mutate(hze_cat = cut(hz_exchng,breaks=quantile(hz_exchng,probs=quarts),labels=qlabel)) %>%
+  mutate(d50_cat = cut(log10(d50m),breaks=quantile(log10(d50m),probs=quarts),labels=qlabel)) 
+  # mutate(doc_cat = cut(log10(doc_annual),breaks=quantile(log10(doc_annual),probs=doc_quarts),labels=doc_qlabel)) %>%
+  # mutate(dox_cat = cut(log10(do_annual),breaks=quantile(log10(do_annual),probs=quarts),labels=qlabel)) %>%
+  # mutate(no3_cat = cut(log10(nitrates),breaks=quantile(log10(nitrates),probs=quarts),labels=qlabel)) %>%
+  # mutate(aer_cat = cut(log10(aer_resp),breaks=quantile(log10(aer_resp),probs=quarts),labels=qlabel)) %>%
+  # mutate(anb_cat = cut(log10(anb_resp),breaks=quantile(log10(anb_resp),probs=quarts),labels=qlabel))
 
 
-# let's now create a categorical variable for residence time using the quartiles
+# Let's check the data
 
-bgc_cln$rt_cat <- cut(bgc_cln$res_time,
-                      breaks=c(1,4,4.6,4.8,5,5.2,5.4,5.6,5.8,6,7,8,9),
-                      labels = c("HZ<","b","c","d","e","f","g","h","i","j","k","l"))
+summary(bgc_cln)
 
-s_breaks <- c(2.0,  3.70, 3.95, 4.20, 4.45, 4.70, 4.95, 5.20, 5.45, 5.70, 5.95,
-              6.20, 6.45, 6.70, 6.95, 7.20, 9.00)
-              
+# We have 65 NAs fot ent_cat, 18 for d50_cat, and 1 NA for both rst_cat, and hze_cat
 
-s_labels0 <-c("Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_","Rt_",
-              "Rt_","Rt_","Rt_","Rt_","Rt_","Rt_")
-              
+summary(bgc_cln %>%filter(is.na(ent_cat)))
+summary(bgc_cln %>%filter(is.na(d50_cat)))
+summary(bgc_cln %>%filter(is.na(rst_cat)))
+summary(bgc_cln %>%filter(is.na(hze_cat)))
 
-s_labels1 <- paste(s_labels0, s_breaks, sep = '')
+# ent_cat NAs correspond to 0 in entropy (i.e. an entirely homogeneous landscape)
+# d50_cat NAs correspond to zeroes in d50 (i.e. no data)
+# rst_cat NA correspond to the minimum value recorded
+# hze_cat NA correspond to the minimum value recorded
 
-s_labels <- s_labels1[2:17]
 
-bgc_cln$srt_cat <- cut(bgc_cln$res_time,
-                       breaks = s_breaks,
-                       labels = s_labels)
+# I'm going to fix this for ent_cat manually by removing those rows, replacing the ent_cat for 
+# Q-20, and inserting them back
+
+bgc_cln1 <- filter(bgc_cln,hrt>0)
+bgc_cln2 <- filter(bgc_cln,hrt==0)
+
+bgc_cln2 <- bgc_cln2 %>% 
+  mutate(ent_cat = "Q10")
+
+summary(bgc_cln2)
+
+bgc_cln3 <- rbind(bgc_cln1,bgc_cln2)
+
+bgc_cln <- na.exclude(bgc_cln3)
 
 # Creating a quasi-sequential color palette for discrete categories
 # Source: https://www.ibm.com/design/language/color/
 
-my_dcolors <- c("#edf5ff","#e5f6ff","#d0e2ff","#bae6ff","#a6c8ff","#82cfff","#78a9ff",
-                "#33b1ff","#4589ff","#1192e8","#0f62fe","#0072c3","#0043ce","#00539a",
-                "#002d9c","#003a6d","#001d6c","#012749","#001141","#061727")
+my_dcolors <- c("#a6c8ff","#78a9ff","#4589ff","#0f62fe",
+                "#00539a","#003a6d","#012749","#061727")
 
+# Creating breaks for logarithmic scale 
+# (see: https://r-graphics.org/recipe-axes-axis-log)
 
+breaks <- 10^(-10:10)
+breaks_c <- 10^seq(-10,10,by=2)
+minor_breaks <- rep(1:9, 21)*(10^rep(-10:10, each=9))
 
+# Landscape entropy and scaling
 
-
-p <- ggplot(bgc_cln,aes(wshd_area,acm_resp,color=rt_cat))+
-  geom_point()+
-  geom_smooth(method="lm",se=FALSE)+
-  scale_x_log10()+
-  scale_y_log10()+
-  geom_abline(slope=1.0)+
-  facet_wrap(~rt_cat)
-p
-
-p <- ggplot(bgc_cln,aes(wshd_area,acm_resp,color=srt_cat))+
-  geom_point(alpha=0.7)+
-  geom_smooth(method="lm",se=FALSE, fullrange=TRUE,linetype="dashed",size=0.45)+
+ent_quant <- ggplot(na.omit(bgc_cln),aes(wshd_area,
+                                 acm_resp,
+                                 color=ent_cat))+
+  facet_wrap(~ent_cat,nrow = 2)+
+  geom_point(aes(alpha=p_frt_t), size = 0.95)+
+  geom_point(aes(alpha=p_shb_t), size = 0.95)+
+  # geom_point(aes(alpha=p_ant_t), size = 2.5)+
+  # geom_smooth(method="lm",fullrange = TRUE, se=FALSE)+
+  scale_x_log10(breaks = breaks, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
   scale_color_manual(values = my_dcolors)+
+  geom_abline(slope=1.0, color = "red", linetype = "dashed", size = 1.5)+
+  guides(color=guide_legend(title = "Landscape Entropy\n(quartiles)"))+
+  theme_httn+
+  theme(legend.position = "none",
+        panel.grid.minor= element_blank(), 
+        panel.grid.major =element_blank(),
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 16),
+        strip.text = element_text(size = 16, face = "bold"))+
+  guides(alpha = "none")
+ent_quant
+
+ent_quant <- ent_quant +   ggtitle(paste("Interpretation:",
+                         "\nMore homogeneous landscapes (i.e. low entropy) seem to exhibit a bimodal",
+                         "\ndistribution for potential scaling exponents. ore heterogeneous landscapes",
+                         "\nappear to come close to linear scaling.",
+                         sep = " "))
+ent_quant
+
+ggsave(file="guerrero_etal_22_scaling_respiration_entropy.png",
+       width = 15,
+       height = 12,
+       units = "in")
+
+# Residence time and scaling
+
+hzt_quant <- ggplot(na.omit(bgc_cln),aes(wshd_area,
+                                         acm_resp,
+                                         color=rst_cat))+
+  facet_wrap(~rst_cat,nrow = 2)+
+  geom_point(aes(alpha=p_frt_t), size = 0.95)+
+  geom_point(aes(alpha=p_shb_t), size = 0.95)+
+  # geom_point(aes(alpha=p_ant_t), size = 2.5)+
+  geom_smooth(method="lm",fullrange = TRUE, se=FALSE)+
+  scale_x_log10(breaks = breaks, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
+  scale_color_manual(values = my_dcolors)+
+  geom_abline(slope=1.0, color = "red", linetype = "dashed", size = 1.5)+
+  guides(color=guide_legend(title = "Residence time\n(log-scale quantiles)"))+
+  theme_httn+
+  theme(legend.position ="none",
+        panel.grid.minor= element_blank(), 
+        panel.grid.major =element_blank(),
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 16),
+        strip.text = element_text(size = 16, face = "bold"))+
+  guides(alpha = "none")
+hzt_quant
+
+hzt_quant <- hzt_quant +   ggtitle(paste("Interpretation:",
+                                         "\nthere is a clear progression towards superlinear scaling with increasing residence",
+                                         "\ntimes in the hyporheic zone",
+                                         sep = " "))
+hzt_quant
+
+ggsave(file="guerrero_etal_22_scaling_respiration_hz_time.png",
+       width = 15,
+       height = 12,
+       units = "in")
+
+
+# Hyporheic exchange and scaling
+
+hze_quant <- ggplot(na.omit(bgc_cln),aes(wshd_area,
+                                         acm_resp,
+                                         color=hze_cat))+
+  facet_wrap(~hze_cat, nrow = 2)+
+  geom_point(aes(alpha=p_frt_t), size = 0.95)+
+  geom_point(aes(alpha=p_shb_t), size = 0.95)+
+  # geom_point(aes(alpha=p_ant_t), size = 2.5)+
+  geom_smooth(method="lm",fullrange = TRUE, se=FALSE)+
+  scale_x_log10(breaks = breaks, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
+  scale_color_manual(values = my_dcolors)+
+  geom_abline(slope=1.0, color = "red", linetype = "dashed", size = 1.5)+
+  guides(color=guide_legend(title = "Hyporheic exchange\n(log-scale quantiles)"))+
+  theme_httn+
+  theme(legend.position = "none",
+        panel.grid.minor= element_blank(), 
+        panel.grid.major =element_blank(),
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 16),
+        strip.text = element_text(size = 16, face = "bold"))+
+  guides(alpha = "none")
+hze_quant
+
+hze_quant <- hze_quant +   ggtitle(paste("Interpretation:",
+                                         "\nHyporheic exchange also shows fittin trends across the data. However",
+                                         "\nmost of the trends tend to be linear or sublinear. When superlinear",
+                                         "\ntrends are observed, at lower exchange rates, there is much more spread",
+                                         "\naround the scaling line when compared to residence time.",
+                                         sep = " "))
+hze_quant
+
+ggsave(file="guerrero_etal_22_scaling_respiration_hyporheic.png",
+       width = 15,
+       height = 12,
+       units = "in")
+
+# D50 and scaling
+
+prt_quant <- ggplot(na.omit(bgc_cln),aes(wshd_area,
+                                         acm_resp,
+                                         color=d50_cat))+
+  facet_wrap(~d50_cat, nrow = 2)+
+  geom_point(aes(alpha=p_frt_t), size = 0.95)+
+  geom_point(aes(alpha=p_shb_t), size = 0.95)+
+  # geom_point(aes(alpha=p_ant_t), size = 2.5)+
+  geom_smooth(method="lm",fullrange = TRUE, se=FALSE)+
+  scale_x_log10(breaks = breaks, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
+  scale_color_manual(values = my_dcolors)+
+  geom_abline(slope=1.0, color = "red", linetype = "dashed", size = 1.5)+
+  guides(color=guide_legend(title = "Particle size\n(log-scale quantiles)"))+
+  theme_httn+
+  theme(legend.position = "none",
+        panel.grid.minor= element_blank(), 
+        panel.grid.major =element_blank(),
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 16),
+        strip.text = element_text(size = 16, face = "bold"))+
+  guides(alpha = "none")
+prt_quant
+
+prt_quant <- prt_quant +   ggtitle(paste("Interpretation:",
+                                         "\nSmaller particle sizes result in longer residence times and move towards",
+                                         "\nsuperlinear scaling. Large particle size seem to converge around linear or",
+                                         "\neven sublinear scaling",
+                                         sep = " "))
+prt_quant
+
+ggsave(file="guerrero_etal_22_scaling_respiration_hyporheic.png",
+       width = 15,
+       height = 12,
+       units = "in")
+
+#########################################################################################
+# Interaction between landscape heterogeneity, residence time, and hyporheic exchange
+# as related to scaling behavior
+#########################################################################################
+
+bgc_long <- na.omit(bgc_cln) %>% select(wshd_area,
+                                         acm_resp,
+                                         p_frt_t,
+                                         p_ant_t,
+                                         p_shb_t,
+                                         hz_exchng,
+                                         res_time,
+                                         ent_cat,
+                                         hze_cat,
+                                         rst_cat,
+                                         hrt) %>% 
+  gather(c(3:5),key="use",value = "fraction")
+
+bgc_long <- bgc_long %>% 
+  mutate(use = fct_relevel(use,c("p_shb_t","p_frt_t","p_ant_t"))) %>% 
+  arrange(use)
+
+
+p <- ggplot(bgc_long,aes(wshd_area,acm_resp,color=use))+
+  geom_abline(slope=1.0, color = "red", linetype = "solid", size = 0.75)+
+  geom_smooth(aes(wshd_area,acm_resp),method = "lm", inherit.aes = FALSE,
+              fullrange = TRUE, color = "black", size = 0.65, se = TRUE, fill = "gray",
+              alpha = 0.7)+
+  geom_point(aes(alpha = fraction),size = 1.5)+
+  facet_wrap(~rst_cat, nrow = 2)+
+  scale_x_log10(breaks = breaks, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  scale_color_manual(values = c("#7b3294","#008837","#dfc27d"))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
+  theme_httn+
+  theme(legend.position = "none",
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 16),
+        strip.text = element_blank(),
+        strip.background = element_blank(),
+        panel.background = element_rect(fill="gray95"))
+p
+
+ggsave(file="guerrero_etal_22_scaling_slopes_entropy.png",
+       width = 15,
+       height = 10,
+       units = "in")
+
+
+# Trying with Plot3D
+
+x <- c(bgc_cln$p_frt_t)
+y <- c(bgc_cln$p_shb_t)
+z <- c(bgc_cln$hrt)
+
+
+scatter3D_fancy <- function(x, y, z,..., colvar = x)
+{
+  panelfirst <- function(pmat) {
+    # XY <- trans3D(x = rep(min(x), length(x)), y, z, pmat = pmat)
+    # scatter2D(XY$x, 
+    #           XY$y, 
+    #           col = ramp.col(c("#a6611a","#dfc27d","#008837")),
+    #           colvar =x,
+    #           pch = ".", 
+    #           cex = 2, 
+    #           add = TRUE, 
+    #           colkey = FALSE)
+    
+    # XY <- trans3D(x, y =rep(max(y), length(y)), z, pmat = pmat)
+    # scatter2D(XY$x, 
+    #           XY$y, 
+    #           col = ramp.col(c("#a6611a","#dfc27d","#008837")),
+    #           colvar =x,
+    #           pch = ".", 
+    #           cex = 2, 
+    #           add = TRUE, 
+    #           colkey = FALSE)
+    
+    XY <- trans3D(x, y, z = rep(min(z), length(z)), pmat = pmat)
+    scatter2D(XY$x, 
+              XY$y, 
+              col = ramp.col(c("#dfc27d","#f5f5f5","#008837")),
+              # col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+              colvar = x, 
+              pch = ".", 
+              cex = 2, 
+              add = TRUE, 
+              colkey = FALSE)
+    
+  }
+  scatter3D(x, y, z, ..., colvar = x, panel.first=panelfirst,
+            colkey = list(length = 0.25, width = 1.5, cex.clab = 1.0, side = 1)) 
+}
+
+scatter3D_fancy(x, y, z, 
+          clab = c("Forestcapes cover","(as a fraction)"),
+          ylab = "Shrubscapes (fraction)",
+          xlab = "Forestcapes (fraction)",
+          zlab = c("Landscape heterogeneity", "(Shannon's entropy)"),
+          bty = "g",
+          alpha = 0.35,
+          # main = "landscape entropy",
+          colvar = x,
+          col = ramp.col(c("#dfc27d","#f5f5f5","#008837")),
+          # col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+          expand = 0.5,
+          theta = 35,
+          phi =10,
+          pch = 20,
+          cex =1.0,
+          ticktype = "detailed")
+
+
+
+# rgl.snapshot("guerrero_etal_22_entropy_landscape.png", fmt = 'png')
+# This line did not work to export the plot, so I had to save it as a png using 
+# the "Export" button from the "Plots" tab. 
+
+
+# Trying with Plot3D
+
+x1 <- c(filter(bgc_cln,p_frt_t>0.35)$p_frt_t)
+y1 <- c(filter(bgc_cln,p_frt_t>0.35)$p_shb_t)
+z1 <- c(filter(bgc_cln,p_frt_t>0.35)$hrt)
+
+x2 <- c(filter(bgc_cln,p_frt_t<0.35 & p_shb_t<0.35)$p_frt_t)
+y2 <- c(filter(bgc_cln,p_frt_t<0.35 & p_shb_t<0.35)$p_shb_t)
+z2 <- c(filter(bgc_cln,p_frt_t<0.35 & p_shb_t<0.35)$hrt)
+
+x3 <- c(filter(bgc_cln,p_frt_t<0.35 & p_ant_t<0.35)$p_frt_t)
+y3 <- c(filter(bgc_cln,p_frt_t<0.35 & p_ant_t<0.35)$p_shb_t)
+z3 <- c(filter(bgc_cln,p_frt_t<0.35 & p_ant_t<0.35)$hrt)
+
+x4 <- c(filter(bgc_cln,p_shb_t>0.35 & p_ant_t>0.35)$p_frt_t)
+y4 <- c(filter(bgc_cln,p_shb_t>0.35 & p_ant_t>0.35)$p_shb_t)
+z4 <- c(filter(bgc_cln,p_shb_t>0.35 & p_ant_t>0.35)$hrt)
+
+td_dat <- 
+
+scatter3D_fancy_t <- function(x, y, z,..., colvar = x)
+{
+  panelfirst <- function(pmat) {
+    # XY <- trans3D(x = rep(min(x), length(x)), y, z, pmat = pmat)
+    # scatter2D(XY$x, 
+    #           XY$y, 
+    #           col = ramp.col(c("#a6611a","#dfc27d","#008837")),
+    #           colvar =x,
+    #           pch = ".", 
+    #           cex = 2, 
+    #           add = TRUE, 
+    #           colkey = FALSE)
+    
+    # XY <- trans3D(x, y =rep(max(y), length(y)), z, pmat = pmat)
+    # scatter2D(XY$x, 
+    #           XY$y, 
+    #           col = ramp.col(c("#a6611a","#dfc27d","#008837")),
+    #           colvar =x,
+    #           pch = ".", 
+    #           cex = 2, 
+    #           add = TRUE, 
+    #           colkey = FALSE)
+    
+    XY <- trans3D(x, y, z = rep(min(z), length(z)), pmat = pmat)
+    scatter2D(XY$x, 
+              XY$y, 
+              col = ramp.col(c("#dfc27d","#f5f5f5","#008837")),
+              # col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+              colvar = x, 
+              pch = ".", 
+              cex = 2, 
+              add = TRUE, 
+              colkey = FALSE)
+    
+  }
+  oldmar <- par("mar")
+  par (mar = par("mar"))
+  scatter3D(x1, y1, z1, ..., colvar = x, panel.first=panelfirst,
+            col = ramp.col(c("#dfc27d","#f5f5f5","#008837")),
+            colkey = list(length = 0.25, width = 1.5, cex.clab = 1.0, side = 1))
+  scatter3D(x2, y2, z2, ..., colvar = x2, panel.first=NULL,
+            col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+            add = TRUE,
+            colkey = NULL)
+  scatter3D(x3, y3, z3, ..., colvar = x3, panel.first=NULL,
+            col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+            add = TRUE,
+            colkey = NULL)
+par(mar = oldmar)
+}
+
+scatter3D_fancy_t(x1, y1, z1, 
+                clab = c("Forestcapes cover","(as a fraction)"),
+                ylab = "Shrubscapes (fraction)",
+                xlab = "Forestcapes (fraction)",
+                zlab = c("Landscape heterogeneity", "(Shannon's entropy)"),
+                bty = "g",
+                alpha = 0.5,
+                # main = "landscape entropy",
+                colvar = x,
+                # col = ramp.col(c("#dfc27d","#f5f5f5","#008837")),
+                # col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+                expand = 0.5,
+                theta = 35,
+                phi =10,
+                pch = 20,
+                cex =1.0,
+                ticktype = "detailed")
+
+
+scatter3D(x, y, z, phi = 0, bty = "g",
+          pch = 20, cex = 2, ticktype = "detailed", expand = 0.5,
+          theta = 35,alpha=0.01)
+scatter3D(x1, y1, z1, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+scatter3D(x2, y2, z2, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+scatter3D(x3, y3, z3, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+scatter3D(x4, y4, z4, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+scatter3D_fancy <- function(x, y, z,..., colvar = x)
+{
+  panelfirst <- function(pmat) {
+    # XY <- trans3D(x = rep(min(x), length(x)), y, z, pmat = pmat)
+    # scatter2D(XY$x, 
+    #           XY$y, 
+    #           col = ramp.col(c("#a6611a","#dfc27d","#008837")),
+    #           colvar =x,
+    #           pch = ".", 
+    #           cex = 2, 
+    #           add = TRUE, 
+    #           colkey = FALSE)
+    
+    # XY <- trans3D(x, y =rep(max(y), length(y)), z, pmat = pmat)
+    # scatter2D(XY$x, 
+    #           XY$y, 
+    #           col = ramp.col(c("#a6611a","#dfc27d","#008837")),
+    #           colvar =x,
+    #           pch = ".", 
+    #           cex = 2, 
+    #           add = TRUE, 
+    #           colkey = FALSE)
+    
+    XY <- trans3D(x, y, z = rep(min(z), length(z)), pmat = pmat)
+    scatter2D(XY$x, 
+              XY$y, 
+              # col = ramp.col(c("#a6611a","#dfc27d","#008837")),
+              col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+              colvar = x, 
+              pch = ".", 
+              cex = 2, 
+              add = TRUE, 
+              colkey = FALSE)
+    
+  }
+  oldmar <- par("mar")
+  par (mar = par("mar") + c(0, 0, 0, 0))
+  scatter3D(x, y, z, ..., 
+            colvar = x, 
+            panel.first=panelfirst,
+            col = ramp.col(c("#a6611a","#dfc27d","#008837")),
+            colkey = list(length = 0.25, width = 1.5, cex.clab = 1.0, side = 1))
+  
+  scatter3D(x, y,
+            z = rep(-max(z)/2, length.out = length(x)),
+            colvar = colvar, col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+            add = TRUE, pch = 18, clab = NULL,
+            colkey = list(length = 0.5, width = 0.5,
+                          dist = 0.05, cex.axis = 0.8, cex.clab = 0.8)
+  )
+  par(mar = oldmar)
+}
+
+scatter3D_fancy(x, y, z, 
+                clab = c("Forestcapes cover","(as a fraction)"),
+                ylab = "Shrubscapes (fraction)",
+                xlab = "Forestcapes (fraction)",
+                zlab = c("Landscape heterogeneity", "(Shannon's entropy)"),
+                bty = "g",
+                alpha = 0.35,
+                # main = "landscape entropy",
+                colvar = y,
+                # col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+                expand = 0.5,
+                theta = 35,
+                phi =10,
+                pch = 20,
+                cex =1.0,
+                ticktype = "detailed")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+bgc_plot0 <- na.omit(bgc_cln) %>% select(wshd_area,
+                   acm_resp,
+                   p_frt_t,
+                   p_ant_t,
+                   p_shb_t,
+                   ent_cat) %>% 
+  gather(c(3:5),key="use",value = "fraction")
+
+
+p <- ggplot(bgc_plot0,aes(wshd_area,acm_resp,color=use))+
+  geom_point(aes(alpha = fraction),size = 1.5)+
+  facet_wrap(~ent_cat)+
+  scale_x_log10(breaks = breaks, 
+              labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  scale_color_manual(values = c("#7b3294","#008837","#dfc27d"))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
+  geom_abline(slope=1.0, color = "red", linetype = "dotted")+
+  theme_httn+
+  theme(legend.position = "none",
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 16),
+        strip.text = element_text(size = 16, face = "bold"))
+p
+
+ggsave(file="guerrero_etal_22_scaling_slopes_entropy.png",
+       width = 15,
+       height = 10,
+       units = "in")
+
+# We have several groups with different landscape composition between Q20 and Q60.
+# I'm going to try to separate them using the reference line for 1:1 linear scaling
+##################################################################################
+#Formally, this needs to be done with an entropy classification algorithm
+##################################################################################
+
+bgc_cln <- bgc_cln %>% 
+  group_by(COMID) %>% 
+  mutate(wr_diff = round(acm_resp - wshd_area,digits = 2)) %>% 
+  mutate(wr_sign = if_else(wr_diff!= 0, wr_diff/abs(wr_diff),0))
+
+# I'm going to plot the data as in the previous figure (bare bones) and use ggplot.build to separate
+# the different groups:
+
+bgc_plot1 <- na.omit(bgc_cln) %>% select(COMID,
+                                        wshd_area,
+                                        acm_resp,
+                                        p_frt_t,
+                                        p_ant_t,
+                                        p_shb_t,
+                                        res_time,
+                                        hrt,
+                                        reach_slp,
+                                        river_slp,
+                                        hz_exchng,
+                                        wr_sign,
+                                        ent_cat) %>% 
+  gather(c(4:6),key="use",value = "fraction")
+
+bgc_plot1 <- bgc_plot1 %>% 
+  mutate(sign_cat=if_else(wr_sign==0,"linear",if_else(wr_sign==1,"up","down"))) %>% 
+  mutate(n_ent_cat=paste(ent_cat,sign_cat,sep = "-")) 
+glimpse(bgc_plot1)
+
+bgc_plot2 <- tibble(bgc_plot1 %>% 
+  group_by(n_ent_cat) %>% 
+  count(n_ent_cat))
+glimpse(bgc_plot2)   
+
+bgc_plot3 <- merge(bgc_plot1,bgc_plot2)
+glimpse(bgc_plot3)
+
+# Let's take a look at the new entropy categories
+
+p <- ggplot(filter(bgc_plot3,n>150),aes(wshd_area, acm_resp,color=n_ent_cat))+
+  geom_point(alpha = 0.05)+
+  geom_smooth(method = "lm", fullrange = TRUE)+
   scale_x_log10()+
   scale_y_log10()+
-  geom_abline(slope=1.0, color = "red")+
-  facet_wrap(~srt_cat)
+  geom_abline(slope = 1)+
+  facet_wrap(~ent_cat)
 p
+
+# Let's use some resampling to calculate the distributions of the scaling exponents
+
+# first, we need to spread the dataset:
+
+bgc_rsm <- spread(bgc_plot3,use,fraction)
+
+
+
+
+
+
+# Number of iterations 
+rtc = levels(bgc_cln$srt_cat)
+cls = 12
+itn = 1:1000
+
+ncols = 11
+nrows = length(itn)
+ssz = 100
+
+
+# Make an empty tibble with all the column headers, plus the iteration.
+scl_results <- tibble(category = as.character(),
+                      iteratn = as.numeric(),
+                      wsa_avg = as.numeric(),
+                      rsp_avg = as.numeric(),
+                      hzt_avg = as.numeric(),
+                      ant_avg = as.numeric(),
+                      frt_avg = as.numeric(),
+                      shb_avg = as.numeric(),
+                      hrt_avg = as.numeric(),
+                      scl_exp = as.numeric(),
+                      scl_int = as.numeric(),
+                      pvl_exp = as.numeric(),
+                      pvl_mod = as.numeric(),
+                      r_sqard = as.numeric(),
+                      rch_slp = as.numeric(),
+                      riv_slp = as.numeric(),
+                      res_mdn = as.numeric())
+
+for (i in rtc){
+  for( j in itn){
+    dat <- bgc_cln %>% filter(srt_cat==i)
+    tst = dat[sample(nrow(dat),size=ssz,replace = TRUE),]
+    sm <- lm(log(acm_resp)~log(wshd_area),data =tst)
+    st <- summary(sm)
+    rsq <- as.numeric(st$r.squared)
+    int <- as.numeric(sm$coefficients[1])
+    slp <- as.numeric(sm$coefficients[2])
+    mrs <- as.numeric(median(sm$residuals))
+    p_slp <- as.numeric(st$coefficients[2,4])
+    p_mod <- as.numeric(pf(st$fstatistic[1],         
+                           st$fstatistic[2], 
+                           st$fstatistic[3], 
+                           lower.tail = FALSE))
+    wsa <- mean(tst$wshd_area)
+    rsp <- mean(tst$acm_resp)
+    hzt <- mean(tst$res_time)
+    ant <- mean(tst$p_ant_t)
+    frt <- mean(tst$p_frt_t)
+    shb <- mean(tst$p_shb_t)
+    hrt <- mean(tst$hrt)
+    ssl <- mean(tst$reach_slp)
+    rsl <- mean(tst$river_slp)
+    row <- tibble(category = i, 
+                  iteratn =j, 
+                  wsa_avg = wsa,
+                  rsp_avg = rsp,
+                  hzt_avg = hzt,
+                  ant_avg = ant,
+                  frt_avg = frt,
+                  shb_avg = shb,
+                  hrt_avg = hrt,
+                  scl_int = int,
+                  scl_exp = slp,
+                  pvl_exp = p_slp,
+                  pvl_mod = p_mod,
+                  r_sqard = rsq,
+                  rch_slp = rsp,
+                  riv_slp = rsl,
+                  res_mdn = mrs)
+    scl_results <- scl_results %>% add_row(row)
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  wsa <- mean(tst$wshd_area)
+rsp <- mean(tst$acm_resp)
+hzt <- mean(tst$res_time)
+ant <- mean(tst$p_ant_t)
+frt <- mean(tst$p_frt_t)
+shb <- mean(tst$p_shb_t)
+hrt <- mean(tst$hrt)
+ssl <- mean(tst$reach_slp)
+rsl <- mean(tst$river_slp)
+
+p <- ggplot(bgc_plot,aes(wshd_area,acm_resp))+
+  geom_point(alpha = 0.5)+
+  facet_wrap(~ent_cat)+
+  scale_x_log10()+
+  scale_y_log10()+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  geom_abline(slope=1.0, color = "red", linetype = "dotted")
+p
+
+g_dat <- ggplot_build(p)# complete dataset for the plot
+p_dat <- g_dat[1]$data# dataset containing information about the panels
+b_dat <- g_dat[3]$plot$data# the actual dataset as organized within the plot
 
 # relationship between residence time and slope
 p <- ggplot(bgc_cln,aes(reach_slp,res_time))+
