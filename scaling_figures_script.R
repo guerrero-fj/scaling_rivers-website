@@ -215,7 +215,7 @@ minor_breaks <- rep(1:9, 21)*(10^rep(-10:10, each=9))
 
 # Landscape entropy and scaling
 
-ent_quant <- ggplot(na.omit(bgc_cln),aes(wshd_area,
+ent_quant <- ggplot(bgc_cln,aes(wshd_area,
                                  acm_resp,
                                  color=ent_cat))+
   facet_wrap(~ent_cat,nrow = 2)+
@@ -258,7 +258,7 @@ ggsave(file="guerrero_etal_22_scaling_respiration_entropy.png",
 
 # Residence time and scaling
 
-hzt_quant <- ggplot(na.omit(bgc_cln),aes(wshd_area,
+hzt_quant <- ggplot(bgc_cln,aes(wshd_area,
                                          acm_resp,
                                          color=rst_cat))+
   facet_wrap(~rst_cat,nrow = 2)+
@@ -301,9 +301,9 @@ ggsave(file="guerrero_etal_22_scaling_respiration_hz_time.png",
 
 # Hyporheic exchange and scaling
 
-hze_quant <- ggplot(na.omit(bgc_cln),aes(wshd_area,
-                                         acm_resp,
-                                         color=hze_cat))+
+hze_quant <- ggplot(bgc_cln,aes(wshd_area,
+                                acm_resp,
+                                color=hze_cat))+
   facet_wrap(~hze_cat, nrow = 2)+
   geom_point(aes(alpha=p_frt_t), size = 0.95)+
   geom_point(aes(alpha=p_shb_t), size = 0.95)+
@@ -345,7 +345,7 @@ ggsave(file="guerrero_etal_22_scaling_respiration_hyporheic.png",
 
 # D50 and scaling
 
-prt_quant <- ggplot(na.omit(bgc_cln),aes(wshd_area,
+prt_quant <- ggplot(bgc_cln,aes(wshd_area,
                                          acm_resp,
                                          color=d50_cat))+
   facet_wrap(~d50_cat, nrow = 2)+
@@ -391,25 +391,21 @@ ggsave(file="guerrero_etal_22_scaling_respiration_hyporheic.png",
 # as related to scaling behavior
 #########################################################################################
 
-bgc_long <- na.omit(bgc_cln) %>% select(wshd_area,
-                                         acm_resp,
-                                         p_frt_t,
-                                         p_ant_t,
-                                         p_shb_t,
-                                         hz_exchng,
-                                         res_time,
-                                         ent_cat,
-                                         hze_cat,
-                                         rst_cat,
-                                         hrt) %>% 
-  gather(c(3:5),key="use",value = "fraction")
-
-bgc_long <- bgc_long %>% 
+bgc_cln %>% select(wshd_area,
+                   acm_resp,
+                   p_frt_t,
+                   p_ant_t,
+                   p_shb_t,
+                   hz_exchng,
+                   res_time,
+                   ent_cat,
+                   hze_cat,
+                   rst_cat,
+                   hrt) %>% 
+  gather(c(3:5),key="use",value = "fraction") %>% 
   mutate(use = fct_relevel(use,c("p_shb_t","p_frt_t","p_ant_t"))) %>% 
-  arrange(use)
-
-
-p <- ggplot(bgc_long,aes(wshd_area,acm_resp,color=use))+
+  arrange(use) %>% 
+  ggplot(aes(wshd_area,acm_resp,color=use))+
   geom_abline(slope=1.0, color = "red", linetype = "solid", size = 0.75)+
   geom_smooth(aes(wshd_area,acm_resp),method = "lm", inherit.aes = FALSE,
               fullrange = TRUE, color = "black", size = 0.65, se = TRUE, fill = "gray",
@@ -432,8 +428,6 @@ p <- ggplot(bgc_long,aes(wshd_area,acm_resp,color=use))+
         strip.text = element_blank(),
         strip.background = element_blank(),
         panel.background = element_rect(fill="gray95"))
-p
-
 ggsave(file="guerrero_etal_22_scaling_slopes_entropy.png",
        width = 15,
        height = 10,
@@ -441,6 +435,84 @@ ggsave(file="guerrero_etal_22_scaling_slopes_entropy.png",
 
 
 # Trying with Plot3D
+
+# I had to break the data this way to use a consistent color scale 
+# across the plots. I have not figure out how to display a triangular
+# color scale with three different colored end points corresponding
+# to the three landscape categories.
+
+x <- c(bgc_cln$p_frt_t)
+y <- c(bgc_cln$p_shb_t)
+z <- c(bgc_cln$hrt)
+
+x1 <- c(filter(bgc_cln,p_frt_t>0.35)$p_frt_t)
+y1 <- c(filter(bgc_cln,p_frt_t>0.35)$p_shb_t)
+z1 <- c(filter(bgc_cln,p_frt_t>0.35)$hrt)
+
+x2 <- c(filter(bgc_cln,p_frt_t<0.35 & p_shb_t<0.35)$p_frt_t)
+y2 <- c(filter(bgc_cln,p_frt_t<0.35 & p_shb_t<0.35)$p_shb_t)
+z2 <- c(filter(bgc_cln,p_frt_t<0.35 & p_shb_t<0.35)$hrt)
+
+x3 <- c(filter(bgc_cln,p_frt_t<0.35 & p_ant_t<0.35)$p_frt_t)
+y3 <- c(filter(bgc_cln,p_frt_t<0.35 & p_ant_t<0.35)$p_shb_t)
+z3 <- c(filter(bgc_cln,p_frt_t<0.35 & p_ant_t<0.35)$hrt)
+
+x4 <- c(filter(bgc_cln,p_shb_t>0.35 & p_ant_t>0.35)$p_frt_t)
+y4 <- c(filter(bgc_cln,p_shb_t>0.35 & p_ant_t>0.35)$p_shb_t)
+z4 <- c(filter(bgc_cln,p_shb_t>0.35 & p_ant_t>0.35)$hrt)
+
+
+scatter3D(x, y, z, 
+          clab = c("Forestcapes cover","(as a fraction)"),
+          ylab = "Shrubscapes (fraction)",
+          xlab = "Forestcapes (fraction)",
+          zlab = c("Landscape heterogeneity", "(Shannon's entropy)"),
+          bty = "g",
+          alpha = 0,
+                # main = "landscape entropy",
+                colvar = x,
+                # col = ramp.col(c("#dfc27d","#f5f5f5","#008837")),
+                # col = ramp.col(c("#7b3294","#dfc27d","#008837")),
+                expand = 0.5,
+                theta = 30,
+                phi =10,
+                pch = 20,
+                cex =1.0,
+                ticktype = "detailed")
+scatter3D(x1, y1, z1, 
+          add = TRUE,
+          alpha = 0.5,
+          colkey = FALSE, 
+          colvar = x1,
+          col = ramp.col(c("#7b3294","#dfc27d","#008837")))
+
+
+
+# col = ramp.col(c("#dfc27d","#f5f5f5","#008837"))
+
+
+scatter3D(x1, y1, z1, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+scatter3D(x2, y2, z2, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+scatter3D(x3, y3, z3, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+scatter3D(x4, y4, z4, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+
+
+scatter3D(x, y, z, phi = 0, bty = "g",
+          pch = 20, cex = 2, ticktype = "detailed", expand = 0.5,
+          theta = 35,alpha=0.01)
+scatter3D(x1, y1, z1, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+scatter3D(x2, y2, z2, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+scatter3D(x3, y3, z3, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+scatter3D(x4, y4, z4, add = TRUE, colkey = FALSE, 
+          pch = 19, cex = 0.5, col = "black")
+
 
 x <- c(bgc_cln$p_frt_t)
 y <- c(bgc_cln$p_shb_t)

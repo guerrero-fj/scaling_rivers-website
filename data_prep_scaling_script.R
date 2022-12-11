@@ -156,7 +156,7 @@ p4
 
 # Information content analysis
 
-# Using Shannon's entropy calculations, we could identify which land use types 
+# Using Shannon's entropy calculations, we can identify which land use types 
 # either locally or at the watershed scale contribute with most of the information
 # about spatial variablity. 
 
@@ -260,7 +260,7 @@ ubt_list <- list()
 wtt_list <- list()
 
 # Number of iterations 
-itn = 100
+itn = 1000
 
 for(i in 1:itn){
   if (i == itn +1){
@@ -392,6 +392,20 @@ bgc_lnd0 <- merge(bgc,lnd_cvr,by = "COMID") # There are duplicates COMIDs in bot
 #datasets, to filter those out:
 
 bgc_lnd <- as_tibble(unique(bgc_lnd0))
+
+# There are 1340 NA values in the following variables
+# d50m
+# order
+# doc_annual
+# do_annual
+# nitrates
+# res_time
+# hz_exchng
+# aer_resp
+# anb_resp
+
+# These rows might be dropped from the data set in following analysis
+# provided that the main results remain unaffected.
 
 write.csv(bgc_lnd,"221206_scaling_lnd_bgc.csv")
 
