@@ -26,7 +26,8 @@ librarian::shelf(ggplot2,# for plotting
                  entropy,#Information theory calculations
                  GGally,#pair plots
                  scales,# manipulating log scales
-                 stringr)# editing text
+                 stringr,# editing text
+                 Hmisc)# Harrell's miscellaneaous for stats
 
 theme_httn<-  theme(axis.text=element_text(colour="black",size=22),
                     axis.title = element_text(size = 32, face = "bold"),
@@ -53,7 +54,17 @@ set.seed(2703)
 #values
 bgc_cln0 <- read.csv("data/221206_scaling_lnd_bgc.csv", 
                   stringsAsFactors=TRUE)
-bgc_cln <- as_tibble(na.exclude(bgc_cln0))# Removing all NA's 
+bgc_cln <- as_tibble(na.exclude(bgc_cln0))# Removing all NA's corresponding
+# to multiple ancillary variables:
+# d50m
+# order
+# doc_annual
+# do_annual
+# nitrates
+# res_time
+# hz_exchng
+# aer_resp
+# anb_resp
 
 # There are extremely low values resulting from the calculation of hrt
 
@@ -63,7 +74,7 @@ bgc_cln <- bgc_cln %>%
 summary(bgc_cln)
 
 # The original data needs to be tidy up with respect to factor levels for land 
-# cover
+# cover to make it into a long format
 
 
 ################################################################################
@@ -138,14 +149,33 @@ paired_plot_b <- select(bgc_cln,
 # let's explore relationships with continuous variables expressed as categories for 
 # easier visualization
 
-# generating categories for both physical and biogeochemical variables usinge quartiles
+########Replacing section#############
 
-# to do so, we first customize the quartiles we want to be used
+#I'm going to try calculating the quantiles with Hmisc::cut2, which allows
+# for the inclusion of zeroes
 
-quarts <- c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1.0)
 qlabel <- c("Q10","Q20","Q30","Q40","Q50","Q60","Q70","Q80+")
 
-# DOC requires specific quatrs and qlabels
+bgc_cln <- bgc_cln %>% 
+  mutate(ent_cat = factor(Hmisc::cut2(hrt, g = 8),labels = qlabel)) %>% 
+  mutate(rst_cat = factor(Hmisc::cut2(res_time, g = 8),labels = qlabel)) %>% 
+  mutate(hze_cat = factor(Hmisc::cut2(hz_exchng, g = 8),labels = qlabel)) %>% 
+  mutate(d50_cat = factor(Hmisc::cut2(log10(d50m), g = 8),labels = qlabel))
+
+bgc_clnt <- bgc_cln0 %>% 
+  select(wshd_area,acm_resp,hrt) %>%
+  mutate(ent_cat = factor(Hmisc::cut2(hrt, g = 8),labels = qlabel))
+  
+  
+
+# generating categories for both physical and biogeochemical variables usinge quartiles
+
+# # to do so, we first customize the quartiles we want to be used
+# 
+# quarts <- c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1.0)
+# qlabel <- c("Q10","Q20","Q30","Q40","Q50","Q60","Q70","Q80+")
+
+# DOC requires specific quatrs and qlabel
 # 
 # doc_quarts <- c(0,0.4,0.5,0.6,0.7,0.8,1.0)
 # doc_qlabel <- c("Q40","Q50","Q60","Q70","Q80","Q90")
@@ -167,10 +197,16 @@ bgc_cln <- bgc_cln %>%
   # mutate(aer_cat = cut(log10(aer_resp),breaks=quantile(log10(aer_resp),probs=quarts),labels=qlabel)) %>%
   # mutate(anb_cat = cut(log10(anb_resp),breaks=quantile(log10(anb_resp),probs=quarts),labels=qlabel))
 
+# We will also run the second line (ent_cat designation) to compare
+# results with and without NAs
+
+bgc_clnt <- bgc_cln0 %>% select(wshd_area,acm_resp,hrt) %>% 
+  mutate(ent_cat = cut(hrt,breaks=quantile(hrt,probs=quarts),labels=qlabel)) 
 
 # Let's check the data
 
 summary(bgc_cln)
+summary(bgc_clnt)
 
 # We have 65 NAs fot ent_cat, 18 for d50_cat, and 1 NA for both rst_cat, and hze_cat
 
@@ -178,6 +214,7 @@ summary(bgc_cln %>%filter(is.na(ent_cat)))
 summary(bgc_cln %>%filter(is.na(d50_cat)))
 summary(bgc_cln %>%filter(is.na(rst_cat)))
 summary(bgc_cln %>%filter(is.na(hze_cat)))
+summary(bgc_clnt %>% filter(is.na(ent_cat)))
 
 # ent_cat NAs correspond to 0 in entropy (i.e. an entirely homogeneous landscape)
 # d50_cat NAs correspond to zeroes in d50 (i.e. no data)
@@ -188,8 +225,39 @@ summary(bgc_cln %>%filter(is.na(hze_cat)))
 # I'm going to fix this for ent_cat manually by removing those rows, replacing the ent_cat for 
 # Q-20, and inserting them back
 
+bgc_cln1 <- filter(bgc_cln,hrt==0)%>% 
+  mutate(ent_cat = "Q10")
+bgc_cln <- na.exclude(rbind(bgc_cln1,bgc_cln)) %>% 
+  mutate(ent_cat = as.factor(ent_cat))
+summary(bgc_cln)
+
+
+
+bgc_cln2 <- filter(bgc_clnt,hrt==0)%>% 
+  mutate(ent_cat = "Q10")
+bgc_clnt <- na.exclude(rbind(bgc_cln2,bgc_clnt)) %>% 
+  summary(bgc_clnt)
+
+
+
+
+
+
+
+
+bgc_cln2$ent_cat <- as.factor(bgc_cln2$ent_cat)
+summary(bgc_cln2)
+
+bgc_cln1 <- filter(bgc_cln,hrt==0) %>% 
+  mutate(ent_cat= as.factor(if_else(ent_cat == "NA", "Q10","")))
+
+
+
+  mutate(ent_cat = across(ent_cat=="NA","Q10")) 
+
 bgc_cln1 <- filter(bgc_cln,hrt>0)
-bgc_cln2 <- filter(bgc_cln,hrt==0)
+bgc_cln1 <- filter(bgc_cln,hrt==0)%>% 
+  mutate(ent_cat = "Q10")
 
 bgc_cln2 <- bgc_cln2 %>% 
   mutate(ent_cat = "Q10")
