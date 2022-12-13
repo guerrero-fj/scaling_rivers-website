@@ -27,7 +27,8 @@ librarian::shelf(ggplot2,# for plotting
                  GGally,#pair plots
                  scales,# manipulating log scales
                  stringr,# editing text
-                 Hmisc)# Harrell's miscellaneaous for stats
+                 Hmisc,# Harrell's miscellaneaous for stats
+                 gtable)# To manipulate ggplot objects
 
 theme_httn<-  theme(axis.text=element_text(colour="black",size=22),
                     axis.title = element_text(size = 32, face = "bold"),
@@ -154,6 +155,8 @@ paired_plot_b <- select(bgc_cln,
 #I'm going to try calculating the quantiles with Hmisc::cut2, which allows
 # for the inclusion of zeroes
 
+# https://stackoverflow.com/questions/46750635/cut-and-quantile-in-r-in-not-including-zero
+
 qlabel <- c("Q10","Q20","Q30","Q40","Q50","Q60","Q70","Q80+")
 
 bgc_cln <- bgc_cln %>% 
@@ -163,122 +166,31 @@ bgc_cln <- bgc_cln %>%
   mutate(d50_cat = factor(Hmisc::cut2(log10(d50m), g = 8),labels = qlabel))
 
 bgc_clnt <- bgc_cln0 %>% 
-  select(wshd_area,acm_resp,hrt) %>%
+  select(wshd_area,
+         acm_resp,
+         hrt,
+         p_frt_t,
+         p_shb_t) %>%
   mutate(ent_cat = factor(Hmisc::cut2(hrt, g = 8),labels = qlabel))
   
   
-
-# generating categories for both physical and biogeochemical variables usinge quartiles
-
-# # to do so, we first customize the quartiles we want to be used
-# 
-# quarts <- c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1.0)
-# qlabel <- c("Q10","Q20","Q30","Q40","Q50","Q60","Q70","Q80+")
-
-# DOC requires specific quatrs and qlabel
-# 
-# doc_quarts <- c(0,0.4,0.5,0.6,0.7,0.8,1.0)
-# doc_qlabel <- c("Q40","Q50","Q60","Q70","Q80","Q90")
-
-# NEED TO REVIEW QUARTILES RESULTS FOR BGC variables, EXCLUDING IT FROM THE ANALYSIS FOR THE
-# MOMENT
-
-
-# landscape heterogeneity
-
-bgc_cln <- bgc_cln %>% 
-  mutate(ent_cat = cut(hrt,breaks=quantile(hrt,probs=quarts),labels=qlabel)) %>% 
-  mutate(rst_cat = cut(res_time,breaks=quantile(res_time,probs=quarts),labels=qlabel)) %>%  
-  mutate(hze_cat = cut(hz_exchng,breaks=quantile(hz_exchng,probs=quarts),labels=qlabel)) %>%
-  mutate(d50_cat = cut(log10(d50m),breaks=quantile(log10(d50m),probs=quarts),labels=qlabel)) 
-  # mutate(doc_cat = cut(log10(doc_annual),breaks=quantile(log10(doc_annual),probs=doc_quarts),labels=doc_qlabel)) %>%
-  # mutate(dox_cat = cut(log10(do_annual),breaks=quantile(log10(do_annual),probs=quarts),labels=qlabel)) %>%
-  # mutate(no3_cat = cut(log10(nitrates),breaks=quantile(log10(nitrates),probs=quarts),labels=qlabel)) %>%
-  # mutate(aer_cat = cut(log10(aer_resp),breaks=quantile(log10(aer_resp),probs=quarts),labels=qlabel)) %>%
-  # mutate(anb_cat = cut(log10(anb_resp),breaks=quantile(log10(anb_resp),probs=quarts),labels=qlabel))
-
-# We will also run the second line (ent_cat designation) to compare
-# results with and without NAs
-
-bgc_clnt <- bgc_cln0 %>% select(wshd_area,acm_resp,hrt) %>% 
-  mutate(ent_cat = cut(hrt,breaks=quantile(hrt,probs=quarts),labels=qlabel)) 
-
-# Let's check the data
-
-summary(bgc_cln)
-summary(bgc_clnt)
-
-# We have 65 NAs fot ent_cat, 18 for d50_cat, and 1 NA for both rst_cat, and hze_cat
-
-summary(bgc_cln %>%filter(is.na(ent_cat)))
-summary(bgc_cln %>%filter(is.na(d50_cat)))
-summary(bgc_cln %>%filter(is.na(rst_cat)))
-summary(bgc_cln %>%filter(is.na(hze_cat)))
-summary(bgc_clnt %>% filter(is.na(ent_cat)))
-
-# ent_cat NAs correspond to 0 in entropy (i.e. an entirely homogeneous landscape)
-# d50_cat NAs correspond to zeroes in d50 (i.e. no data)
-# rst_cat NA correspond to the minimum value recorded
-# hze_cat NA correspond to the minimum value recorded
-
-
-# I'm going to fix this for ent_cat manually by removing those rows, replacing the ent_cat for 
-# Q-20, and inserting them back
-
-bgc_cln1 <- filter(bgc_cln,hrt==0)%>% 
-  mutate(ent_cat = "Q10")
-bgc_cln <- na.exclude(rbind(bgc_cln1,bgc_cln)) %>% 
-  mutate(ent_cat = as.factor(ent_cat))
-summary(bgc_cln)
-
-
-
-bgc_cln2 <- filter(bgc_clnt,hrt==0)%>% 
-  mutate(ent_cat = "Q10")
-bgc_clnt <- na.exclude(rbind(bgc_cln2,bgc_clnt)) %>% 
-  summary(bgc_clnt)
-
-
-
-
-
-
-
-
-bgc_cln2$ent_cat <- as.factor(bgc_cln2$ent_cat)
-summary(bgc_cln2)
-
-bgc_cln1 <- filter(bgc_cln,hrt==0) %>% 
-  mutate(ent_cat= as.factor(if_else(ent_cat == "NA", "Q10","")))
-
-
-
-  mutate(ent_cat = across(ent_cat=="NA","Q10")) 
-
-bgc_cln1 <- filter(bgc_cln,hrt>0)
-bgc_cln1 <- filter(bgc_cln,hrt==0)%>% 
-  mutate(ent_cat = "Q10")
-
-bgc_cln2 <- bgc_cln2 %>% 
-  mutate(ent_cat = "Q10")
-
-summary(bgc_cln2)
-
-bgc_cln3 <- rbind(bgc_cln1,bgc_cln2)
-
-bgc_cln <- na.exclude(bgc_cln3)
-
 # Creating a quasi-sequential color palette for discrete categories
 # Source: https://www.ibm.com/design/language/color/
 
 my_dcolors <- c("#a6c8ff","#78a9ff","#4589ff","#0f62fe",
                 "#00539a","#003a6d","#012749","#061727")
 
+my_rcolors <- c("#fff1f1","#ffd7d9","#ffb3b8","#fa4d56",
+               "#da1e28","#a2191f","#750e13","#2d0709")
+
+my_mcolors <- c("#ffd6e8","#ffafd2","#ff7eb6","#ee5396",
+                "#d62670","#9f1853","#740937","#510224")
+
 # Creating breaks for logarithmic scale 
 # (see: https://r-graphics.org/recipe-axes-axis-log)
 
 breaks <- 10^(-10:10)
-breaks_c <- 10^seq(-10,10,by=2)
+breaks_c <- 10^seq(-10,10,by=4)
 minor_breaks <- rep(1:9, 21)*(10^rep(-10:10, each=9))
 
 # Landscape entropy and scaling
@@ -286,29 +198,32 @@ minor_breaks <- rep(1:9, 21)*(10^rep(-10:10, each=9))
 ent_quant <- ggplot(bgc_cln,aes(wshd_area,
                                  acm_resp,
                                  color=ent_cat))+
-  facet_wrap(~ent_cat,nrow = 2)+
-  geom_point(aes(alpha=p_frt_t), size = 0.95)+
-  geom_point(aes(alpha=p_shb_t), size = 0.95)+
+  geom_point(size = 2.5,aes(alpha = hrt))+
+  # geom_smooth(method="lm",fullrange = TRUE, se=FALSE)+
+  # facet_wrap(~ent_cat,nrow = 2)+
+  # geom_point(aes(alpha=p_frt_t), size = 2.5)+
+  # geom_point(aes(alpha=p_shb_t), size = 2.5)+
   # geom_point(aes(alpha=p_ant_t), size = 2.5)+
   # geom_smooth(method="lm",fullrange = TRUE, se=FALSE)+
   scale_x_log10(breaks = breaks, 
                 labels = trans_format("log10", math_format(10^.x)))+
   scale_y_log10(breaks = breaks_c, 
+                limits = c(10^-6,10^6),
                 labels = trans_format("log10", math_format(10^.x)))+
   xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
   ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
   annotation_logticks(size = 0.75, sides = "tblr")+
-  scale_color_manual(values = my_dcolors)+
+  scale_color_manual(values = my_mcolors)+
   geom_abline(slope=1.0, color = "red", linetype = "dashed", size = 1.5)+
   guides(color=guide_legend(title = "Landscape Entropy\n(quartiles)"))+
   theme_httn+
-  theme(legend.position = "none",
-        panel.grid.minor= element_blank(), 
-        panel.grid.major =element_blank(),
-        legend.text = element_text(size=12),
-        legend.title = element_text(size=16),
+  theme(legend.position =c(0.85,0.15),
+        # panel.grid.minor= element_blank(), 
+        # panel.grid.major =element_blank(),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size=18),
         plot.title = element_text(size = 16),
-        strip.text = element_text(size = 16, face = "bold"))+
+        strip.text = element_text(size = 18, face = "bold"))+
   guides(alpha = "none")
 ent_quant
 
@@ -320,7 +235,7 @@ ent_quant <- ent_quant +   ggtitle(paste("Interpretation:",
 ent_quant
 
 ggsave(file="guerrero_etal_22_scaling_respiration_entropy.png",
-       width = 15,
+       width = 12,
        height = 12,
        units = "in")
 
@@ -329,29 +244,31 @@ ggsave(file="guerrero_etal_22_scaling_respiration_entropy.png",
 hzt_quant <- ggplot(bgc_cln,aes(wshd_area,
                                          acm_resp,
                                          color=rst_cat))+
-  facet_wrap(~rst_cat,nrow = 2)+
-  geom_point(aes(alpha=p_frt_t), size = 0.95)+
-  geom_point(aes(alpha=p_shb_t), size = 0.95)+
+  geom_abline(slope=1.0, color = "red", linetype = "dashed", size = 1.5)+
+  # facet_wrap(~rst_cat,nrow = 2)+
+  # geom_point(aes(alpha=p_frt_t), size = 0.95)+
+  # geom_point(aes(alpha=p_shb_t), size = 0.95)+
   # geom_point(aes(alpha=p_ant_t), size = 2.5)+
+  geom_point(size = 2.5, aes(alpha = res_time))+
   geom_smooth(method="lm",fullrange = TRUE, se=FALSE)+
   scale_x_log10(breaks = breaks, 
-                labels = trans_format("log10", math_format(10^.x)))+
-  scale_y_log10(breaks = breaks_c, 
+                 labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c,
+                limits = c(10^-6,10^6),
                 labels = trans_format("log10", math_format(10^.x)))+
   xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
   ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
   annotation_logticks(size = 0.75, sides = "tblr")+
   scale_color_manual(values = my_dcolors)+
-  geom_abline(slope=1.0, color = "red", linetype = "dashed", size = 1.5)+
   guides(color=guide_legend(title = "Residence time\n(log-scale quantiles)"))+
   theme_httn+
-  theme(legend.position ="none",
-        panel.grid.minor= element_blank(), 
-        panel.grid.major =element_blank(),
-        legend.text = element_text(size=12),
-        legend.title = element_text(size=16),
+  theme(legend.position =c(0.85,0.15),
+        # panel.grid.minor= element_blank(), 
+        # panel.grid.major =element_blank(),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size=18),
         plot.title = element_text(size = 16),
-        strip.text = element_text(size = 16, face = "bold"))+
+        strip.text = element_text(size = 18, face = "bold"))+
   guides(alpha = "none")
 hzt_quant
 
@@ -361,8 +278,8 @@ hzt_quant <- hzt_quant +   ggtitle(paste("Interpretation:",
                                          sep = " "))
 hzt_quant
 
-ggsave(file="guerrero_etal_22_scaling_respiration_hz_time.png",
-       width = 15,
+ggsave(file="guerrero_etal_22_scaling_respiration_hz_time_all.png",
+       width = 12,
        height = 12,
        units = "in")
 
@@ -459,6 +376,10 @@ ggsave(file="guerrero_etal_22_scaling_respiration_hyporheic.png",
 # as related to scaling behavior
 #########################################################################################
 
+new.labs <- c("HZt-Q10","HZt-Q20", "HZt-Q30","HZt-Q40","HZt-Q50",
+                          "HZt-Q60","HZt-Q70","HZt-Q80+")
+names(new.labs) <- c("Q10","Q20","Q30","Q40","Q50","Q60","Q70","Q80+")
+
 bgc_cln %>% select(wshd_area,
                    acm_resp,
                    p_frt_t,
@@ -474,13 +395,13 @@ bgc_cln %>% select(wshd_area,
   mutate(use = fct_relevel(use,c("p_shb_t","p_frt_t","p_ant_t"))) %>% 
   arrange(use) %>% 
   ggplot(aes(wshd_area,acm_resp,color=use))+
+  facet_wrap(~rst_cat, nrow = 2, labeller = labeller(rst_cat = new.labs))+
   geom_abline(slope=1.0, color = "red", linetype = "solid", size = 0.75)+
   geom_smooth(aes(wshd_area,acm_resp),method = "lm", inherit.aes = FALSE,
               fullrange = TRUE, color = "black", size = 0.65, se = TRUE, fill = "gray",
               alpha = 0.7)+
-  geom_point(aes(alpha = fraction),size = 1.5)+
-  facet_wrap(~rst_cat, nrow = 2)+
-  scale_x_log10(breaks = breaks, 
+  geom_point(aes(alpha = fraction),size = 2.5)+
+  scale_x_log10(breaks = breaks_c, 
                 labels = trans_format("log10", math_format(10^.x)))+
   scale_y_log10(breaks = breaks_c, 
                 labels = trans_format("log10", math_format(10^.x)))+
@@ -493,13 +414,236 @@ bgc_cln %>% select(wshd_area,
         legend.text = element_text(size=12),
         legend.title = element_text(size=16),
         plot.title = element_text(size = 16),
-        strip.text = element_blank(),
-        strip.background = element_blank(),
-        panel.background = element_rect(fill="gray95"))
+        strip.text = element_text(size = 16, face = "bold"))
+        # strip.background = element_blank())
+
+
+
 ggsave(file="guerrero_etal_22_scaling_slopes_entropy.png",
-       width = 15,
+       width = 20,
        height = 10,
        units = "in")
+
+# Changing color strips according to residence times
+
+# https://stackoverflow.com/questions/19440069/ggplot2-facet-wrap-strip-color-based-on-variable-in-data-set
+
+p1 <- bgc_cln %>% select(wshd_area,
+                         acm_resp,
+                         p_frt_t,
+                         p_ant_t,
+                         p_shb_t,
+                         hz_exchng,
+                         res_time,
+                         ent_cat,
+                         hze_cat,
+                         rst_cat,
+                         hrt) %>% 
+  gather(c(3:5),key="use",value = "fraction") %>% 
+  mutate(use = fct_relevel(use,c("p_shb_t","p_frt_t","p_ant_t"))) %>% 
+  arrange(use) %>% 
+  ggplot(aes(wshd_area,acm_resp,color=use))+
+  facet_wrap(~rst_cat, nrow = 2, labeller = labeller(rst_cat = new.labs))+
+  geom_abline(slope=1.0, color = "red", linetype = "solid", size = 0.75)+
+  geom_smooth(aes(wshd_area,acm_resp),method = "lm", inherit.aes = FALSE,
+              fullrange = TRUE, color = "black", size = 0.65, se = TRUE, fill = "gray",
+              alpha = 0.7)+
+  geom_point(aes(alpha = fraction),size = 2.5)+
+  scale_x_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  scale_color_manual(values = c("#7b3294","#008837","#dfc27d"))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
+  theme_httn+
+  theme(legend.position = "none",
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 16),
+        strip.text = element_text(size = 16, face = "bold"))
+
+dummy <- bgc_cln %>% select(wshd_area,
+                         acm_resp,
+                         p_frt_t,
+                         p_ant_t,
+                         p_shb_t,
+                         hz_exchng,
+                         res_time,
+                         ent_cat,
+                         hze_cat,
+                         rst_cat,
+                         hrt) %>% 
+  gather(c(3:5),key="use",value = "fraction") %>% 
+  mutate(use = fct_relevel(use,c("p_shb_t","p_frt_t","p_ant_t"))) %>% 
+  arrange(use) %>% 
+  ggplot(aes(wshd_area,acm_resp,color=use))+
+  facet_wrap(~rst_cat, nrow = 2, labeller = labeller(rst_cat = new.labs))+
+  geom_rect(aes(fill=rst_cat), xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf)+
+  scale_fill_manual(values = my_dcolors)+
+  scale_x_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  scale_color_manual(values = c("#7b3294","#008837","#dfc27d"))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
+  theme_httn+
+  theme(legend.position = "none",
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 16),
+        strip.text = element_text(size = 16, face = "bold"))
+
+dummy <- ggplot(data = d, aes(x = farm, y = weight))+ facet_wrap(~fruit) + 
+  geom_rect(aes(fill=size), xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf) +
+  theme_minimal()
+
+library(gtable)
+
+g1 <- ggplotGrob(p1)
+g2 <- ggplotGrob(dummy)
+
+gtable_select <- function (x, ...) 
+{
+  matches <- c(...)
+  x$layout <- x$layout[matches, , drop = FALSE]
+  x$grobs <- x$grobs[matches]
+  x
+}
+
+panels <- grepl(pattern="panel", g2$layout$name)
+strips <- grepl(pattern="strip_t", g2$layout$name)
+g2$layout$t[panels] <- g2$layout$t[panels] - 1
+g2$layout$b[panels] <- g2$layout$b[panels] - 1
+
+new_strips <- gtable_select(g2, panels | strips)
+grid.newpage()
+grid.draw(new_strips)
+
+gtable_stack <- function(g1, g2){
+  g1$grobs <- c(g1$grobs, g2$grobs)
+  g1$layout <- transform(g1$layout, z= z-max(z), name="g2")
+  g1$layout <- rbind(g1$layout, g2$layout)
+  g1
+}
+## ideally you'd remove the old strips, for now they're just covered
+new_plot <- gtable_stack(g1, new_strips)
+grid.newpage()
+grid.draw(new_plot)
+
+
+
+
+
+
+
+
+
+
+# Landscape entropy and scaling (poster plot, alternative version)
+
+ent_quant <- ggplot(bgc_cln,aes(wshd_area,
+                                acm_resp,
+                                color=hrt))+
+  geom_point(size = 2.5,aes(alpha = hrt))+
+  # geom_smooth(method="lm",fullrange = TRUE, se=FALSE)+
+  # facet_wrap(~ent_cat,nrow = 2)+
+  # geom_point(aes(alpha=p_frt_t), size = 0.95)+
+  # geom_point(aes(alpha=p_shb_t), size = 0.95)+
+  # geom_point(aes(alpha=p_ant_t), size = 2.5)+
+  # geom_smooth(method="lm",fullrange = TRUE, se=FALSE)+
+  scale_x_log10(breaks = breaks, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
+  scale_color_distiller(palette = "Greens")+
+  geom_abline(slope=1.0, color = "red", linetype = "dashed", size = 1.5)+
+  guides(color=guide_legend(title = "Landscape Entropy\n(quartiles)"))+
+  theme_httn+
+  theme(legend.position =c(0.85,0.15),
+        # panel.grid.minor= element_blank(), 
+        # panel.grid.major =element_blank(),
+        legend.text = element_text(size=16),
+        legend.title = element_text(size=18),
+        plot.title = element_text(size = 16),
+        strip.text = element_text(size = 18, face = "bold"))+
+  guides(alpha = "none")
+ent_quant
+
+ent_quant <- ent_quant +   ggtitle(paste("Interpretation:",
+                                         "\nMore homogeneous landscapes (i.e. low entropy) seem to exhibit a bimodal",
+                                         "\ndistribution for potential scaling exponents. ore heterogeneous landscapes",
+                                         "\nappear to come close to linear scaling.",
+                                         sep = " "))
+ent_quant
+
+ggsave(file="guerrero_etal_22_scaling_respiration_entropy.png",
+       width = 15,
+       height = 12,
+       units = "in")
+
+
+
+
+
+
+
+
+# Landscape heterogeneity and scaling (re-organizing layers)
+
+bgc_cln %>% select(wshd_area,
+                   acm_resp,
+                   p_frt_t,
+                   p_ant_t,
+                   p_shb_t,
+                   hz_exchng,
+                   res_time,
+                   ent_cat,
+                   hze_cat,
+                   rst_cat,
+                   hrt) %>% 
+  gather(c(3:5),key="use",value = "fraction") %>% 
+  mutate(use = fct_relevel(use,c("p_frt_t","p_ant_t","p_shb_t"))) %>% 
+  arrange(use) %>% 
+  ggplot(aes(wshd_area,acm_resp,color=ent_cat))+
+  # facet_wrap(~use)+
+  # facet_wrap(~rst_cat, nrow = 2, labeller = labeller(rst_cat = new.labs))+
+  geom_abline(slope=1.0, color = "red", linetype = "solid", size = 0.75)+
+  geom_smooth(aes(wshd_area,acm_resp),method = "lm", inherit.aes = FALSE,
+              fullrange = TRUE, color = "black", size = 0.65, se = TRUE, fill = "gray",
+              alpha = 0.7)+
+  geom_point(alpha = .05, size = 2.5)+
+  scale_x_log10(breaks = breaks, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  scale_y_log10(breaks = breaks_c, 
+                labels = trans_format("log10", math_format(10^.x)))+
+  xlab(expression(bold(paste("Watershed area"," ","(",km^2,")"))))+
+  ylab(expression(bold(paste("Cumulative total respiration"," ","(",gCO[2]*m^-2*d^-1,")"))))+
+  # scale_color_manual(values = c("#008837","#dfc27d","#7b3294"))+
+  annotation_logticks(size = 0.75, sides = "tblr")+
+  theme_httn+
+  theme(legend.position = "none",
+        legend.text = element_text(size=12),
+        legend.title = element_text(size=16),
+        plot.title = element_text(size = 16))
+# strip.text = element_blank(),
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Trying with Plot3D
